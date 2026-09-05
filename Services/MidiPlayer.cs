@@ -250,14 +250,14 @@ public static class MidiPlayer
             // Channel 2 (0x92): Set instrument Glockenspiel (9) -> 0xC2 | (9 << 8)
             SendMidi(0x000009C2);
 
-            // Sắc nét, cao và dứt khoát (Double chime): A5 (81) -> E6 (88)
+            // Sắc nét, thanh thoát (Double chime): A5 (81) -> E6 (88)
             int[] notes = { 81, 88 };
             foreach (int note in notes)
             {
                 if (token.IsCancellationRequested) break;
-                int noteOnMsg = 0x92 | (note << 8) | (110 << 16);
+                int noteOnMsg = 0x92 | (note << 8) | (85 << 16);
                 SendMidi(noteOnMsg);
-                Thread.Sleep(55);
+                Thread.Sleep(50);
             }
 
             Thread.Sleep(80);
@@ -286,22 +286,14 @@ public static class MidiPlayer
                     return;
             }
 
-            // Channel 2 (0x92): Set instrument Marimba (12) -> 0xC2 | (12 << 8)
-            SendMidi(0x00000CC2);
+            // Channel 2 (0x92): Set instrument Celesta (8) -> 0xC2 | (8 << 8)
+            SendMidi(0x000008C2);
 
-            // Âm thanh gõ gỗ trầm, êm tai và dứt điểm: G5 (79) -> C5 (72)
-            int[] notes = { 79, 72 };
-            foreach (int note in notes)
-            {
-                if (token.IsCancellationRequested) break;
-                int noteOnMsg = 0x92 | (note << 8) | (95 << 16);
-                SendMidi(noteOnMsg);
-                Thread.Sleep(45);
-            }
-
-            Thread.Sleep(60);
-            SendMidi(0x82 | (79 << 8));
-            SendMidi(0x82 | (72 << 8));
+            // Nốt chuông nhẹ, êm dịu và thanh thoát: C6 (84) với âm lượng nhỏ vừa đủ nghe (velocity 65)
+            int noteOnMsg = 0x92 | (84 << 8) | (65 << 16);
+            SendMidi(noteOnMsg);
+            Thread.Sleep(100);
+            SendMidi(0x82 | (84 << 8));
         });
     }
 }
