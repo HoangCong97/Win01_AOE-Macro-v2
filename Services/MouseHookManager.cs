@@ -8,11 +8,13 @@ public class MouseHookManager : IDisposable
     private IntPtr _hookId = IntPtr.Zero;
     private readonly NativeMethods.HookProc _proc;
     private bool _isMiddleDownIntercepted = false;
+    private bool _isLeftDownIntercepted = false;
 
     public event Action? MouseClicked;
     public event Action? RightButtonDown;
     public event Action? RightButtonUp;
     public event Func<int, bool>? MiddleClickActionOccurred;
+    public event Func<int, bool>? LeftClickActionOccurred;
 
     public MouseHookManager()
     {
@@ -84,6 +86,19 @@ public class MouseHookManager : IDisposable
             else if (msg == 0x0201) // WM_LBUTTONDOWN
             {
                 MouseClicked?.Invoke();
+                if (LeftClickActionOccurred != null && LeftClickActionOccurred.Invoke(msg))
+                {
+                    _isLeftDownIntercepted = true;
+                    return (IntPtr)1; // Suppress original left mouse down
+                }
+            }
+            else if (msg == 0x0202) // WM_LBUTTONUP
+            {
+                if (_isLeftDownIntercepted)
+                {
+                    _isLeftDownIntercepted = false;
+                    return (IntPtr)1; // Suppress original left mouse up
+                }
             }
             else if (msg == 0x0204) // WM_RBUTTONDOWN
             {

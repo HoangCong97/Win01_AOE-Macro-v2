@@ -48,6 +48,9 @@ public class ControlEngine : IDisposable
     private bool _isRightMouseDown = false;
     private bool _isShiftTemporarilyReleasedForMouse = false;
 
+    // Flag/Waypoint Mode (Chức năng đặt cờ) tracking state
+    private bool _isFlagModeActive = false;
+
     public event Action<MacroState>? StateChanged;
     public event Action<string, Color>? LogRequested;
     public event Action<int, int>? FarmTimerUpdated;
@@ -61,6 +64,7 @@ public class ControlEngine : IDisposable
         _mouseHook.RightButtonDown += OnRightButtonDown;
         _mouseHook.RightButtonUp += OnRightButtonUp;
         _mouseHook.MiddleClickActionOccurred += OnMiddleClickAction;
+        _mouseHook.LeftClickActionOccurred += OnLeftClickAction;
         _gameWatcher.InGameStatusChanged += OnInGameStatusChanged;
         _gameWatcher.ChatStatusChanged += OnChatStatusChanged;
 
@@ -97,6 +101,7 @@ public class ControlEngine : IDisposable
         _isAltDown = false;
         _isAltCombo = false;
         InputSimulator.ReleaseAltKeysHardware();
+        ExitFlagMode();
         _gameWatcher.Stop();
         _mouseHook.Stop();
         _keyboardHook.Stop();
@@ -132,6 +137,7 @@ public class ControlEngine : IDisposable
             _isAltDown = false;
             _isAltCombo = false;
             InputSimulator.ReleaseAltKeysHardware();
+            ExitFlagMode();
             _winKeyState = 0;
             _lastWinKeyTime = DateTime.MinValue;
             _f2LoopTimer.Stop();
@@ -150,6 +156,12 @@ public class ControlEngine : IDisposable
     private void OnRightButtonDown()
     {
         _isRightMouseDown = true;
+        if (_isFlagModeActive)
+        {
+            // Trong chế độ đặt cờ, duy trì SHIFT để chuột phải cắm cờ (waypoint)
+            return;
+        }
+
         if (_currentState == MacroState.Active && _gameWatcher.IsInGame && _isPhysicalShiftDown)
         {
             _isShiftTemporarilyReleasedForMouse = true;
@@ -171,6 +183,53 @@ public class ControlEngine : IDisposable
                     InputSimulator.SendKeyDown((ushort)Keys.ShiftKey);
                 }
             });
+        }
+    }
+
+    private bool OnLeftClickAction(int msg)
+    {
+        if (_currentState != MacroState.Active || !_gameWatcher.IsInGame)
+        {
+            return false;
+        }
+
+        if (_isFlagModeActive)
+        {
+            ExitFlagMode();
+            Log("[Đặt cờ] Click chuột trái -> Nhả SHIFT, chuyển thành Chuột Phải và Tắt chế độ đặt cờ", Color.Teal);
+            MidiPlayer.PlayToggleOffSound();
+
+            Task.Run(() =>
+            {
+                RunActionSync(() =>
+                {
+                    InputSimulator.ReleaseShiftKeysHardware();
+                    Thread.Sleep(15);
+                    InputSimulator.SendRightClick(25);
+                });
+            });
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private void ReleaseAllFlagArrowKeys()
+    {
+        InputSimulator.SendKeyUp((ushort)Keys.Up);
+        InputSimulator.SendKeyUp((ushort)Keys.Left);
+        InputSimulator.SendKeyUp((ushort)Keys.Down);
+        InputSimulator.SendKeyUp((ushort)Keys.Right);
+    }
+
+    private void ExitFlagMode()
+    {
+        if (_isFlagModeActive)
+        {
+            _isFlagModeActive = false;
+            ReleaseAllFlagArrowKeys();
+            InputSimulator.ReleaseShiftKeysHardware();
         }
     }
 
@@ -228,6 +287,7 @@ public class ControlEngine : IDisposable
             _isAltDown = false;
             _isAltCombo = false;
             InputSimulator.ReleaseAltKeysHardware();
+            ExitFlagMode();
 
             if (_currentState == MacroState.Active || _currentState == MacroState.SuspendedChat)
             {
@@ -257,6 +317,11 @@ public class ControlEngine : IDisposable
         {
             _currentState = newState;
             _farmTimerManager.IsEnabled = (_currentState != MacroState.Disabled);
+
+            if (_currentState != MacroState.Active)
+            {
+                ExitFlagMode();
+            }
 
             // Toggle Windows LockWorkstation policy (Win+L screen lock)
             SystemPolicyManager.SetLockWorkstationDisabled(_currentState == MacroState.Active);
@@ -368,10 +433,20 @@ public class ControlEngine : IDisposable
             _isPhysicalShiftDown = false;
             _isRightMouseDown = false;
             _isShiftTemporarilyReleasedForMouse = false;
-            RunActionSync(() =>
+            if (!_isFlagModeActive)
             {
-                InputSimulator.ReleaseShiftKeysHardware();
-            });
+                RunActionSync(() =>
+                {
+                    InputSimulator.ReleaseShiftKeysHardware();
+                });
+            }
+            else
+            {
+                RunActionSync(() =>
+                {
+                    InputSimulator.SendKeyDown((ushort)Keys.ShiftKey);
+                });
+            }
         }
 
         // Xử lý sự kiện nhả phím CTRL (CTRL KeyUp)
@@ -467,6 +542,61 @@ public class ControlEngine : IDisposable
         }
 
         // ----------------------------------------------------
+        // **Chức năng: Đặt cờ (Flag/Waypoint Mode)** (Phím CAPS LOCK toggle)
+        // ----------------------------------------------------
+        if (key == Keys.Capital)
+        {
+            if (isKeyDown)
+            {
+                _isFlagModeActive = !_isFlagModeActive;
+                if (_isFlagModeActive)
+                {
+                    Log("[Đặt cờ] BẬT chế độ đặt cờ -> Giữ SHIFT down, AWSD chuyển thành 4 phím mũi tên", Color.Teal);
+                    MidiPlayer.PlayToggleOnSound();
+                    RunActionSync(() =>
+                    {
+                        InputSimulator.SendKeyDown((ushort)Keys.ShiftKey);
+                    });
+                }
+                else
+                {
+                    Log("[Đặt cờ] TẮT chế độ đặt cờ -> Nhả SHIFT, AWSD trở về bình thường", Color.Teal);
+                    MidiPlayer.PlayToggleOffSound();
+                    ExitFlagMode();
+                }
+            }
+            return true; // Luôn chặn CAPS LOCK để không làm đảo lộn trạng thái gõ chữ hoa của Windows
+        }
+
+        // ----------------------------------------------------
+        // **Chế độ đặt cờ: AWSD -> 4 phím mũi tên (Di chuyển góc nhìn)**
+        // ----------------------------------------------------
+        if (_isFlagModeActive)
+        {
+            ushort arrowKey = key switch
+            {
+                Keys.W => (ushort)Keys.Up,
+                Keys.A => (ushort)Keys.Left,
+                Keys.S => (ushort)Keys.Down,
+                Keys.D => (ushort)Keys.Right,
+                _ => 0
+            };
+
+            if (arrowKey != 0)
+            {
+                if (isKeyDown)
+                {
+                    InputSimulator.SendKeyDown(arrowKey);
+                }
+                else
+                {
+                    InputSimulator.SendKeyUp(arrowKey);
+                }
+                return true;
+            }
+        }
+
+        // ----------------------------------------------------
         // **Chức năng: Khởi đầu nhanh** (F2)
         // ----------------------------------------------------
         if (key == Keys.F2)
@@ -538,14 +668,6 @@ public class ControlEngine : IDisposable
             return true;
         }
 
-        // ----------------------------------------------------
-        // **Chức năng: Chuẩn bị cho kích đời 3** (Phím ALT hoặc CAPS LOCK)
-        // ----------------------------------------------------
-        if (key == Keys.Capital && isKeyDown)
-        {
-            ExecuteAge3FastUpgrade();
-            return true;
-        }
 
         // ----------------------------------------------------
         // **Chức năng: Đạo quân nhanh** (SHIFT + 1..6, CTRL + `)
@@ -1020,10 +1142,12 @@ public class ControlEngine : IDisposable
         }
     }
 
-    private static bool IsMacroKey(Keys key, bool ctrlPressed, bool shiftPressed)
+    private bool IsMacroKey(Keys key, bool ctrlPressed, bool shiftPressed)
     {
         if (key == Keys.Tab || key == Keys.LWin || key == Keys.RWin || key == Keys.Capital ||
             key == Keys.Menu || key == Keys.LMenu || key == Keys.RMenu) return true;
+
+        if (_isFlagModeActive && (key is Keys.W or Keys.A or Keys.S or Keys.D)) return true;
 
         if (ctrlPressed || shiftPressed)
         {

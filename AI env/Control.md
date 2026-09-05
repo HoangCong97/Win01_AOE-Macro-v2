@@ -151,7 +151,7 @@ Mới:
 
 **Chức năng: Chuẩn bị cho kích đời 3**
 *Mô tả cơ chế hoạt động:*
-- Phím (ALT) (hoặc CAPS LOCK) kích hoạt chuỗi macro 3 bước để chuẩn bị lên đời 3 nhanh:
+- Phím (ALT) kích hoạt chuỗi macro 3 bước để chuẩn bị lên đời 3 nhanh:
   + Lần 1: Thực thi [H -> C -> 2 -> SPACE -> B -> M] để chọn nhà chính (H), xin dân/kích đời (C -> 2), giãn góc nhìn (SPACE) và đặt móng Chợ (B -> M).
   + Lần 2 (trong vòng tối đa 30 giây từ lần 1): Thực thi [3 -> SPACE -> B -> A] để chọn đạo 3, giãn góc nhìn và đặt móng nhà BA.
   + Lần 3 (trong vòng tối đa 30 giây từ lần 2): Thực thi [ESC -> 3 -> SPACE -> B -> L] để hủy móng đang chọn (ESC), chọn đạo 3, giãn góc nhìn và đặt móng nhà BL.
@@ -161,10 +161,23 @@ Mới:
   - Các tổ hợp phím hệ thống như ALT + TAB, ALT + F4 vẫn được nhận diện và hoạt động trơn tru bình thường.
 
 Chi tiết phím remapping:
-- (ALT) (hoặc CAPS LOCK):
+- (ALT):
   + Nhấn lần 1: [H -> C -> 2 -> SPACE -> B -> M]
   + Nhấn lần 2 (<= 30s): [3 -> SPACE -> B -> A]
   + Nhấn lần 3 (<= 30s): [ESC -> 3 -> SPACE -> B -> L]
+
+**Chức năng: Đặt cờ (Flag / Waypoint Mode)**
+*Mô tả cơ chế hoạt động:*
+- Nút (CAPS LOCK) đóng vai trò như một công tắc Bật/Tắt (toggle) chế độ Đặt cờ:
+  + Khi BẬT CAPS LOCK: Hệ thống tự động kích hoạt giữ phím SHIFT ảo (`ShiftDown`), đồng thời chuyển 4 phím `A, W, S, D` thành 4 phím mũi tên (`Left, Up, Down, Right`) để người dùng dễ dàng lướt/cuộn góc nhìn bản đồ bằng tay trái.
+  + Trong lúc chế độ đặt cờ đang bật, người dùng thoải mái click chuột phải trên bản đồ để cắm các mốc cờ tuần tra/dò đường (waypoint).
+  + Khi kết thúc chuỗi đặt cờ:
+    * Click Chuột Trái: Hệ thống tự động `ShiftUp` trước, sau đó chuyển cú click chuột trái này thành một cú nhấp Chuột Phải (để chỉ định điểm đến kết thúc chuỗi) và tự động TẮT chế độ CAPS LOCK.
+    * Hoặc Bấm lại CAPS LOCK: Hệ thống tự động `ShiftUp`, nhả các phím mũi tên và đưa 4 phím `A, W, S, D` trở lại chức năng thông thường.
+
+Chi tiết phím remapping:
+- (CAPS LOCK): Toggle Bật/Tắt chế độ Đặt cờ (Giữ SHIFT down + AWSD -> 4 phím mũi tên).
+- (Chuột Trái khi đang bật CAPS LOCK): ShiftUp -> Chuyển thành Chuột Phải -> Tắt CAPS LOCK.
 
 
 **Chức năng: thiết lập thay đổi phím dynamic**
