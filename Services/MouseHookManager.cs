@@ -40,6 +40,16 @@ public class MouseHookManager : IDisposable
         }
     }
 
+    public void PromoteHookToTop()
+    {
+        if (_hookId != IntPtr.Zero)
+        {
+            NativeMethods.UnhookWindowsHookEx(_hookId);
+            _hookId = IntPtr.Zero;
+        }
+        Start();
+    }
+
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0)

@@ -101,6 +101,8 @@ public class ControlEngine : IDisposable
         if (_currentState == MacroState.Disabled)
         {
             MidiPlayer.PlayToggleOnSound();
+            _keyboardHook.PromoteHookToTop();
+            _mouseHook.PromoteHookToTop();
             if (_gameWatcher.IsInGame)
             {
                 SetState(MacroState.Active, "Macro BẬT (F1) -> Trạng thái: [Hoạt động]");
@@ -223,6 +225,9 @@ public class ControlEngine : IDisposable
         }
         else
         {
+            _keyboardHook.PromoteHookToTop();
+            _mouseHook.PromoteHookToTop();
+
             if (_currentState == MacroState.SuspendedOutOfGame)
             {
                 SetState(_savedStateBeforeUnfocus, $"Quay lại game -> Tiếp tục: {_savedStateBeforeUnfocus.ToDisplayName()}");

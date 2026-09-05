@@ -26,6 +26,13 @@ public static class InputSimulator
             }
         }
 
+        ushort scanCode = (ushort)NativeMethods.MapVirtualKey(vkCode, NativeMethods.MAPVK_VK_TO_VSC);
+        uint flags = 0;
+        if (IsExtendedKey(vkCode))
+        {
+            flags |= NativeMethods.KEYEVENTF_EXTENDEDKEY;
+        }
+
         NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[1];
         inputs[0] = new NativeMethods.INPUT
         {
@@ -35,8 +42,8 @@ public static class InputSimulator
                 ki = new NativeMethods.KEYBDINPUT
                 {
                     wVk = vkCode,
-                    wScan = 0,
-                    dwFlags = 0,
+                    wScan = scanCode,
+                    dwFlags = flags,
                     time = 0,
                     dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
                 }
@@ -48,6 +55,13 @@ public static class InputSimulator
 
     public static void SendKeyUp(ushort vkCode)
     {
+        ushort scanCode = (ushort)NativeMethods.MapVirtualKey(vkCode, NativeMethods.MAPVK_VK_TO_VSC);
+        uint flags = NativeMethods.KEYEVENTF_KEYUP;
+        if (IsExtendedKey(vkCode))
+        {
+            flags |= NativeMethods.KEYEVENTF_EXTENDEDKEY;
+        }
+
         NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[1];
         inputs[0] = new NativeMethods.INPUT
         {
@@ -57,8 +71,8 @@ public static class InputSimulator
                 ki = new NativeMethods.KEYBDINPUT
                 {
                     wVk = vkCode,
-                    wScan = 0,
-                    dwFlags = NativeMethods.KEYEVENTF_KEYUP,
+                    wScan = scanCode,
+                    dwFlags = flags,
                     time = 0,
                     dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
                 }
@@ -66,6 +80,14 @@ public static class InputSimulator
         };
 
         NativeMethods.SendInput(1, inputs, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
+    }
+
+    private static bool IsExtendedKey(ushort vkCode)
+    {
+        return vkCode is (ushort)Keys.Up or (ushort)Keys.Down or (ushort)Keys.Left or (ushort)Keys.Right
+            or (ushort)Keys.Insert or (ushort)Keys.Delete or (ushort)Keys.Home or (ushort)Keys.End
+            or (ushort)Keys.PageUp or (ushort)Keys.PageDown or (ushort)Keys.RControlKey or (ushort)Keys.RMenu
+            or (ushort)Keys.LWin or (ushort)Keys.RWin;
     }
 
     public static void SendCtrlKeyCombo(ushort targetVk)
