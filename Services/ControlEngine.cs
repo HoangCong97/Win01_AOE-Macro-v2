@@ -51,6 +51,10 @@ public class ControlEngine : IDisposable
     // Flag/Waypoint Mode (Chức năng đặt cờ) tracking state
     private bool _isFlagModeActive = false;
 
+    // Farm refresh context (Làm mới ruộng SHIFT+F / SHIFT+G) tracking
+    private bool _isFarmRefreshActive = false;
+    private DateTime _lastFarmRefreshTime = DateTime.MinValue;
+
     public event Action<MacroState>? StateChanged;
     public event Action<string, Color>? LogRequested;
     public event Action<int, int>? FarmTimerUpdated;
@@ -102,6 +106,8 @@ public class ControlEngine : IDisposable
         _isAltCombo = false;
         InputSimulator.ReleaseAltKeysHardware();
         ExitFlagMode();
+        _isFarmRefreshActive = false;
+        _lastFarmRefreshTime = DateTime.MinValue;
         _gameWatcher.Stop();
         _mouseHook.Stop();
         _keyboardHook.Stop();
@@ -138,6 +144,8 @@ public class ControlEngine : IDisposable
             _isAltCombo = false;
             InputSimulator.ReleaseAltKeysHardware();
             ExitFlagMode();
+            _isFarmRefreshActive = false;
+            _lastFarmRefreshTime = DateTime.MinValue;
             _winKeyState = 0;
             _lastWinKeyTime = DateTime.MinValue;
             _f2LoopTimer.Stop();
@@ -162,7 +170,9 @@ public class ControlEngine : IDisposable
             return;
         }
 
-        if (_currentState == MacroState.Active && _gameWatcher.IsInGame && _isPhysicalShiftDown)
+        bool isFarmRefreshWindow = _isFarmRefreshActive && (DateTime.Now - _lastFarmRefreshTime).TotalSeconds <= 6.0;
+
+        if (_currentState == MacroState.Active && _gameWatcher.IsInGame && _isPhysicalShiftDown && isFarmRefreshWindow)
         {
             _isShiftTemporarilyReleasedForMouse = true;
             InputSimulator.ReleaseShiftKeysHardware();
@@ -431,6 +441,8 @@ public class ControlEngine : IDisposable
             _isPhysicalShiftDown = false;
             _isRightMouseDown = false;
             _isShiftTemporarilyReleasedForMouse = false;
+            _isFarmRefreshActive = false;
+            _lastFarmRefreshTime = DateTime.MinValue;
             if (!_isFlagModeActive)
             {
                 RunActionSync(() =>
@@ -757,6 +769,8 @@ public class ControlEngine : IDisposable
         if (shiftPressed && key == Keys.F) // SHIFT + F: Làm mới đạo ruộng 1 (ESC -> 7 -> S -> SPACE)
         {
             ResetAllChains();
+            _isFarmRefreshActive = true;
+            _lastFarmRefreshTime = DateTime.Now;
             Log("[Đạo ruộng 1] SHIFT+F -> Làm mới đạo ruộng 1 (ESC -> 7 -> S -> SPACE)", Color.DarkGreen);
             _farmTimerManager.RestartTimer1();
             RunActionSync(() =>
@@ -834,6 +848,8 @@ public class ControlEngine : IDisposable
         if (shiftPressed && key == Keys.G) // SHIFT + G: Làm mới đạo ruộng 2 (ESC -> 8 -> S -> SPACE)
         {
             ResetAllChains();
+            _isFarmRefreshActive = true;
+            _lastFarmRefreshTime = DateTime.Now;
             Log("[Đạo ruộng 2] SHIFT+G -> Làm mới đạo ruộng 2 (ESC -> 8 -> S -> SPACE)", Color.DarkGreen);
             _farmTimerManager.RestartTimer2();
             RunActionSync(() =>

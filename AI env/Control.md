@@ -143,7 +143,7 @@ Mới:
 
 *Lưu ý khi làm mới ruộng (SHIFT + F / SHIFT + G):*
 - Người dùng có thể giữ phím SHIFT liên tục: bấm SHIFT + F rồi bấm tiếp G (hoặc SHIFT + G rồi bấm tiếp F) mà không cần nhả phím SHIFT. Hệ thống tự nhận diện và thực thi làm mới liên tục cho từng đạo ruộng mà không bị mất phím hay xung đột.
-- **Tự động nhả SHIFT khi click chuột phải**: Trong lúc người dùng đang giữ phím SHIFT, nếu ấn chuột phải (di chuyển dân/quân, chỉ định ăn gỗ/quả/vàng, làm ruộng,...), hệ thống sẽ lập tức nhả SHIFT ảo để game không bị nhận nhầm thành `SHIFT + Chuột phải` (tránh bị cắm cờ hành động - waypoint). Ngay sau khi nhả chuột phải, hệ thống sẽ tự động bật lại SHIFT ảo để người dùng tiếp tục các thao tác SHIFT tiếp theo mà không bị gián đoạn. Chuột trái vẫn giữ nguyên hành vi gốc (để người dùng có thể dùng SHIFT + chuột trái chọn cộng dồn quân/dân khi cần).
+- **Tự động nhả SHIFT khi click chuột phải thông minh (Smart Context)**: Cơ chế tự động nhả SHIFT khi click chuột phải chỉ kích hoạt khi người dùng vừa bấm `SHIFT + F` hoặc `SHIFT + G` để làm mới ruộng và đang giữ phím SHIFT (hiệu lực kéo dài đến 6 giây cho mỗi lần bấm làm mới). Khi người dùng nhả phím SHIFT hoặc trong mọi tình huống bình thường khác (không bấm làm mới ruộng), phím `SHIFT` vật lý giữ nguyên 100% chức năng gốc của game AOE (giữ SHIFT + click chuột phải để cắm cờ waypoint di chuyển/dò đường thoải mái mà không bị mất). Chuột trái vẫn giữ nguyên hành vi gốc để chọn cộng dồn quân/dân.
 
 **Chức năng: Đạo quân nhanh**
 (SHIFT + 1): [SHIFT + 1 -> Ctrl + 1 -> SPACE] (Số 1 có thể thay đổi tùy theo số đạo quân 1 -> 6)
