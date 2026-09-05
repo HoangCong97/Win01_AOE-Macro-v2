@@ -147,6 +147,13 @@ public static class InputSimulator
         SendKeyUp((ushort)Keys.RShiftKey);
     }
 
+    public static void ReleaseAltKeysHardware()
+    {
+        SendKeyUp((ushort)Keys.Menu);
+        SendKeyUp((ushort)Keys.LMenu);
+        SendKeyUp((ushort)Keys.RMenu);
+    }
+
     public static void ReleaseWinKeysHardware()
     {
         SendKeyUp((ushort)Keys.LWin);

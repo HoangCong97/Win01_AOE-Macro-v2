@@ -151,14 +151,17 @@ Mới:
 
 **Chức năng: Chuẩn bị cho kích đời 3**
 *Mô tả cơ chế hoạt động:*
-- Phím (CAPS LOCK) kích hoạt chuỗi macro 3 bước để chuẩn bị lên đời 3 nhanh:
+- Phím (ALT) (hoặc CAPS LOCK) kích hoạt chuỗi macro 3 bước để chuẩn bị lên đời 3 nhanh:
   + Lần 1: Thực thi [H -> C -> 2 -> SPACE -> B -> M] để chọn nhà chính (H), xin dân/kích đời (C -> 2), giãn góc nhìn (SPACE) và đặt móng Chợ (B -> M).
   + Lần 2 (trong vòng tối đa 30 giây từ lần 1): Thực thi [3 -> SPACE -> B -> A] để chọn đạo 3, giãn góc nhìn và đặt móng nhà BA.
   + Lần 3 (trong vòng tối đa 30 giây từ lần 2): Thực thi [ESC -> 3 -> SPACE -> B -> L] để hủy móng đang chọn (ESC), chọn đạo 3, giãn góc nhìn và đặt móng nhà BL.
-  + Quá 30 giây không nhấn phím CAPS LOCK kế tiếp hoặc sau khi hoàn thành xong bước 3, máy trạng thái sẽ tự động reset về trạng thái ban đầu (Lần 1).
+  + Quá 30 giây không nhấn phím ALT kế tiếp hoặc sau khi hoàn thành xong bước 3, máy trạng thái sẽ tự động reset về trạng thái ban đầu (Lần 1).
+  *Cơ chế chống Menu Mode & tương thích tổ hợp:*
+  - Nhấn thả (Tap) phím ALT đơn lẻ được chặn hoàn toàn trước khi tới Windows để loại bỏ triệt để hiện tượng treo game/vào Menu Mode và tránh lỗi tổ hợp ngoài ý muốn ALT + SPACE.
+  - Các tổ hợp phím hệ thống như ALT + TAB, ALT + F4 vẫn được nhận diện và hoạt động trơn tru bình thường.
 
 Chi tiết phím remapping:
-- (CAPS LOCK):
+- (ALT) (hoặc CAPS LOCK):
   + Nhấn lần 1: [H -> C -> 2 -> SPACE -> B -> M]
   + Nhấn lần 2 (<= 30s): [3 -> SPACE -> B -> A]
   + Nhấn lần 3 (<= 30s): [ESC -> 3 -> SPACE -> B -> L]

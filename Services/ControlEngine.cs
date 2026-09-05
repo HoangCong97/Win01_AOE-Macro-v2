@@ -31,6 +31,9 @@ public class ControlEngine : IDisposable
     // Age 3 Fast Upgrade (Kích đời 3) tracking state
     private int _winKeyState = 0;
     private DateTime _lastWinKeyTime = DateTime.MinValue;
+    private bool _isAltDown = false;
+    private bool _isAltCombo = false;
+    private DateTime _altPressTime = DateTime.MinValue;
 
     // Vẩy E tracking state
     private bool _isVayEActive = false;
@@ -91,6 +94,9 @@ public class ControlEngine : IDisposable
         _isRightMouseDown = false;
         _isShiftTemporarilyReleasedForMouse = false;
         InputSimulator.ReleaseShiftKeysHardware();
+        _isAltDown = false;
+        _isAltCombo = false;
+        InputSimulator.ReleaseAltKeysHardware();
         _gameWatcher.Stop();
         _mouseHook.Stop();
         _keyboardHook.Stop();
@@ -123,6 +129,9 @@ public class ControlEngine : IDisposable
             _isRightMouseDown = false;
             _isShiftTemporarilyReleasedForMouse = false;
             InputSimulator.ReleaseShiftKeysHardware();
+            _isAltDown = false;
+            _isAltCombo = false;
+            InputSimulator.ReleaseAltKeysHardware();
             _winKeyState = 0;
             _lastWinKeyTime = DateTime.MinValue;
             _f2LoopTimer.Stop();
@@ -216,6 +225,9 @@ public class ControlEngine : IDisposable
             _isRightMouseDown = false;
             _isShiftTemporarilyReleasedForMouse = false;
             InputSimulator.ReleaseShiftKeysHardware();
+            _isAltDown = false;
+            _isAltCombo = false;
+            InputSimulator.ReleaseAltKeysHardware();
 
             if (_currentState == MacroState.Active || _currentState == MacroState.SuspendedChat)
             {
@@ -344,7 +356,8 @@ public class ControlEngine : IDisposable
             _isPhysicalShiftDown = true;
         }
 
-        bool altPressed = (NativeMethods.GetAsyncKeyState((int)Keys.Menu) & 0x8000) != 0 ||
+        bool altPressed = _isAltDown ||
+                          (NativeMethods.GetAsyncKeyState((int)Keys.Menu) & 0x8000) != 0 ||
                           (NativeMethods.GetAsyncKeyState((int)Keys.LMenu) & 0x8000) != 0 ||
                           (NativeMethods.GetAsyncKeyState((int)Keys.RMenu) & 0x8000) != 0 ||
                           (NativeMethods.GetKeyState((int)Keys.Menu) & 0x8000) != 0;
@@ -394,6 +407,57 @@ public class ControlEngine : IDisposable
         if (isKeyDown && key >= Keys.D1 && key <= Keys.D6 && !ctrlPressed && !shiftPressed && !altPressed)
         {
             _previousMilitaryGroup = key;
+        }
+
+        bool isAltKey = (key == Keys.Menu || key == Keys.LMenu || key == Keys.RMenu);
+
+        // ----------------------------------------------------
+        // **Xử lý phím ALT: Chuẩn bị cho kích đời 3 & chống Menu Mode**
+        // ----------------------------------------------------
+        if (isAltKey)
+        {
+            if (isKeyDown)
+            {
+                if (!_isAltDown)
+                {
+                    _isAltDown = true;
+                    _isAltCombo = (ctrlPressed || shiftPressed);
+                    _altPressTime = DateTime.Now;
+                }
+                return true; // Chặn phím ALT truyền xuống Windows/Game ngay từ đầu để tránh vào Menu mode
+            }
+            else // ALT KeyUp
+            {
+                bool wasAltDown = _isAltDown;
+                bool wasCombo = _isAltCombo;
+                double pressDuration = (DateTime.Now - _altPressTime).TotalMilliseconds;
+                _isAltDown = false;
+                _isAltCombo = false;
+
+                if (wasAltDown && !wasCombo && pressDuration <= 1500 && !ctrlPressed && !shiftPressed)
+                {
+                    // Người dùng tap phím ALT thuần túy -> Kích hoạt chuỗi Chuẩn bị cho kích đời 3!
+                    ExecuteAge3FastUpgrade();
+                    return true; // Tiêu thụ hoàn toàn sự kiện ALT up để Windows không vào Menu Mode
+                }
+                else
+                {
+                    InputSimulator.ReleaseAltKeysHardware();
+                    return false;
+                }
+            }
+        }
+
+        // Nếu đang giữ ALT mà ấn phím khác -> Đánh dấu là tổ hợp phím (Combo)
+        if (_isAltDown && !isAltKey)
+        {
+            _isAltCombo = true;
+            // Cho phép các tổ hợp hệ thống như ALT + TAB, ALT + F4 hoạt động bình thường
+            InputSimulator.SendKeyDown((ushort)Keys.Menu);
+            if (key == Keys.Tab || key == Keys.F4)
+            {
+                return false;
+            }
         }
 
         // KHÔNG CHẮN TÍNH NĂNG ALT + TAB
@@ -475,73 +539,11 @@ public class ControlEngine : IDisposable
         }
 
         // ----------------------------------------------------
-        // **Chức năng: Chuẩn bị cho kích đời 3** (Phím CAPS LOCK)
+        // **Chức năng: Chuẩn bị cho kích đời 3** (Phím ALT hoặc CAPS LOCK)
         // ----------------------------------------------------
-        if (key == Keys.Capital)
+        if (key == Keys.Capital && isKeyDown)
         {
-            ResetBuildingState();
-            DateTime now = DateTime.Now;
-
-            if (_winKeyState > 0 && (now - _lastWinKeyTime).TotalSeconds > 30.0)
-            {
-                _winKeyState = 0;
-            }
-
-            if (_winKeyState == 0)
-            {
-                _winKeyState = 1;
-                _lastWinKeyTime = now;
-                Log("[Kích đời 3] Lần 1: H -> C -> 2 -> SPACE -> B -> M (Đặt Chợ)", Color.Brown);
-                RunActionSync(() =>
-                {
-                    InputSimulator.SendKeyPress((ushort)Keys.H, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.C, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.D2, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.Space, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.B, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.M, 10);
-                });
-            }
-            else if (_winKeyState == 1)
-            {
-                _winKeyState = 2;
-                _lastWinKeyTime = now;
-                Log("[Kích đời 3] Lần 2 (<= 30s): 3 -> SPACE -> B -> A (Đặt nhà BA)", Color.Brown);
-                RunActionSync(() =>
-                {
-                    InputSimulator.SendKeyPress((ushort)Keys.D3, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.Space, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.B, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.A, 10);
-                });
-            }
-            else if (_winKeyState == 2)
-            {
-                _winKeyState = 0;
-                _lastWinKeyTime = DateTime.MinValue;
-                Log("[Kích đời 3] Lần 3 (<= 30s): ESC -> 3 -> SPACE -> B -> L (Đặt nhà BL)", Color.Brown);
-                RunActionSync(() =>
-                {
-                    InputSimulator.SendKeyPress((ushort)Keys.Escape, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.D3, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.Space, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.B, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.L, 10);
-                });
-            }
-
+            ExecuteAge3FastUpgrade();
             return true;
         }
 
@@ -1020,7 +1022,8 @@ public class ControlEngine : IDisposable
 
     private static bool IsMacroKey(Keys key, bool ctrlPressed, bool shiftPressed)
     {
-        if (key == Keys.Tab || key == Keys.LWin || key == Keys.RWin || key == Keys.Capital) return true;
+        if (key == Keys.Tab || key == Keys.LWin || key == Keys.RWin || key == Keys.Capital ||
+            key == Keys.Menu || key == Keys.LMenu || key == Keys.RMenu) return true;
 
         if (ctrlPressed || shiftPressed)
         {
@@ -1049,6 +1052,78 @@ public class ControlEngine : IDisposable
         if (_isF2Pressed && _currentState == MacroState.Active)
         {
             ExecuteH_C();
+        }
+    }
+
+    private void ExecuteAge3FastUpgrade()
+    {
+        ResetBuildingState();
+        DateTime now = DateTime.Now;
+
+        if (_winKeyState > 0 && (now - _lastWinKeyTime).TotalSeconds > 30.0)
+        {
+            _winKeyState = 0;
+        }
+
+        if (_winKeyState == 0)
+        {
+            _winKeyState = 1;
+            _lastWinKeyTime = now;
+            Log("[Kích đời 3] Lần 1: H -> C -> 2 -> SPACE -> B -> M (Đặt Chợ)", Color.Brown);
+            RunActionSync(() =>
+            {
+                InputSimulator.ReleaseAltKeysHardware();
+                Thread.Sleep(5);
+                InputSimulator.SendKeyPress((ushort)Keys.H, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.C, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.D2, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.Space, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.B, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.M, 10);
+            });
+        }
+        else if (_winKeyState == 1)
+        {
+            _winKeyState = 2;
+            _lastWinKeyTime = now;
+            Log("[Kích đời 3] Lần 2 (<= 30s): 3 -> SPACE -> B -> A (Đặt nhà BA)", Color.Brown);
+            RunActionSync(() =>
+            {
+                InputSimulator.ReleaseAltKeysHardware();
+                Thread.Sleep(5);
+                InputSimulator.SendKeyPress((ushort)Keys.D3, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.Space, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.B, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.A, 10);
+            });
+        }
+        else if (_winKeyState == 2)
+        {
+            _winKeyState = 0;
+            _lastWinKeyTime = DateTime.MinValue;
+            Log("[Kích đời 3] Lần 3 (<= 30s): ESC -> 3 -> SPACE -> B -> L (Đặt nhà BL)", Color.Brown);
+            RunActionSync(() =>
+            {
+                InputSimulator.ReleaseAltKeysHardware();
+                Thread.Sleep(5);
+                InputSimulator.SendKeyPress((ushort)Keys.Escape, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.D3, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.Space, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.B, 10);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.L, 10);
+            });
         }
     }
 
