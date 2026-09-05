@@ -197,7 +197,7 @@ public class ControlEngine : IDisposable
         {
             ExitFlagMode();
             Log("[Đặt cờ] Click chuột trái -> Nhả SHIFT, chuyển thành Chuột Phải và Tắt chế độ đặt cờ", Color.Teal);
-            MidiPlayer.PlayToggleOffSound();
+            MidiPlayer.PlayFlagModeOffSound();
 
             Task.Run(() =>
             {
@@ -550,7 +550,7 @@ public class ControlEngine : IDisposable
                 {
                     _isFlagModeActive = true;
                     Log("[Đặt cờ] BẬT chế độ đặt cờ -> Giữ SHIFT down, AWSD chuyển thành 4 phím mũi tên", Color.Teal);
-                    MidiPlayer.PlayToggleOnSound();
+                    MidiPlayer.PlayFlagModeOnSound();
                     RunActionSync(() =>
                     {
                         InputSimulator.SendKeyDown((ushort)Keys.ShiftKey);
@@ -559,7 +559,7 @@ public class ControlEngine : IDisposable
                 else
                 {
                     Log("[Đặt cờ] TẮT chế độ đặt cờ -> Nhả SHIFT, AWSD trở về bình thường", Color.Teal);
-                    MidiPlayer.PlayToggleOffSound();
+                    MidiPlayer.PlayFlagModeOffSound();
                     ExitFlagMode();
                 }
             }

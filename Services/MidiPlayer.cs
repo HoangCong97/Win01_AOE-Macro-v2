@@ -212,4 +212,96 @@ public static class MidiPlayer
                 Thread.Sleep(100);
         });
     }
+
+    // ─── Flag Mode sounds (Chế độ đặt cờ) ───────────────────────────────
+
+    private static readonly object _flagLock = new();
+    private static CancellationTokenSource? _flagCts;
+
+    private static void StopCurrentFlagSound()
+    {
+        if (_flagCts != null)
+        {
+            _flagCts.Cancel();
+            _flagCts = null;
+        }
+    }
+
+    public static void PlayFlagModeOnSound()
+    {
+        CancellationToken token;
+        lock (_flagLock)
+        {
+            StopCurrentFlagSound();
+            _flagCts = new CancellationTokenSource();
+            token = _flagCts.Token;
+        }
+
+        Task.Run(() =>
+        {
+            EnsureMidiOpen();
+
+            lock (_flagLock)
+            {
+                if (token.IsCancellationRequested)
+                    return;
+            }
+
+            // Channel 2 (0x92): Set instrument Glockenspiel (9) -> 0xC2 | (9 << 8)
+            SendMidi(0x000009C2);
+
+            // Sắc nét, cao và dứt khoát (Double chime): A5 (81) -> E6 (88)
+            int[] notes = { 81, 88 };
+            foreach (int note in notes)
+            {
+                if (token.IsCancellationRequested) break;
+                int noteOnMsg = 0x92 | (note << 8) | (110 << 16);
+                SendMidi(noteOnMsg);
+                Thread.Sleep(55);
+            }
+
+            Thread.Sleep(80);
+            SendMidi(0x82 | (81 << 8));
+            SendMidi(0x82 | (88 << 8));
+        });
+    }
+
+    public static void PlayFlagModeOffSound()
+    {
+        CancellationToken token;
+        lock (_flagLock)
+        {
+            StopCurrentFlagSound();
+            _flagCts = new CancellationTokenSource();
+            token = _flagCts.Token;
+        }
+
+        Task.Run(() =>
+        {
+            EnsureMidiOpen();
+
+            lock (_flagLock)
+            {
+                if (token.IsCancellationRequested)
+                    return;
+            }
+
+            // Channel 2 (0x92): Set instrument Marimba (12) -> 0xC2 | (12 << 8)
+            SendMidi(0x00000CC2);
+
+            // Âm thanh gõ gỗ trầm, êm tai và dứt điểm: G5 (79) -> C5 (72)
+            int[] notes = { 79, 72 };
+            foreach (int note in notes)
+            {
+                if (token.IsCancellationRequested) break;
+                int noteOnMsg = 0x92 | (note << 8) | (95 << 16);
+                SendMidi(noteOnMsg);
+                Thread.Sleep(45);
+            }
+
+            Thread.Sleep(60);
+            SendMidi(0x82 | (79 << 8));
+            SendMidi(0x82 | (72 << 8));
+        });
+    }
 }
