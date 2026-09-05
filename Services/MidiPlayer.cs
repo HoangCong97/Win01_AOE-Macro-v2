@@ -255,7 +255,7 @@ public static class MidiPlayer
             foreach (int note in notes)
             {
                 if (token.IsCancellationRequested) break;
-                int noteOnMsg = 0x92 | (note << 8) | (85 << 16);
+                int noteOnMsg = 0x92 | (note << 8) | (118 << 16);
                 SendMidi(noteOnMsg);
                 Thread.Sleep(50);
             }
@@ -289,10 +289,10 @@ public static class MidiPlayer
             // Channel 2 (0x92): Set instrument Celesta (8) -> 0xC2 | (8 << 8)
             SendMidi(0x000008C2);
 
-            // Nốt chuông nhẹ, êm dịu và thanh thoát: C6 (84) với âm lượng nhỏ vừa đủ nghe (velocity 65)
-            int noteOnMsg = 0x92 | (84 << 8) | (65 << 16);
+            // Nốt chuông nhẹ, êm dịu và thanh thoát: C6 (84) với âm lượng rõ ràng (velocity 110)
+            int noteOnMsg = 0x92 | (84 << 8) | (110 << 16);
             SendMidi(noteOnMsg);
-            Thread.Sleep(100);
+            Thread.Sleep(140);
             SendMidi(0x82 | (84 << 8));
         });
     }
