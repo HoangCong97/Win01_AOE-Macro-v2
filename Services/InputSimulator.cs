@@ -145,6 +145,37 @@ public static class InputSimulator
         SendKeyUp((ushort)Keys.ShiftKey);
         SendKeyUp((ushort)Keys.LShiftKey);
         SendKeyUp((ushort)Keys.RShiftKey);
+
+        NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[2];
+        inputs[0] = new NativeMethods.INPUT
+        {
+            type = NativeMethods.INPUT_KEYBOARD,
+            U = new NativeMethods.INPUT_UNION
+            {
+                ki = new NativeMethods.KEYBDINPUT
+                {
+                    wVk = (ushort)Keys.LShiftKey,
+                    wScan = 0x2A,
+                    dwFlags = NativeMethods.KEYEVENTF_KEYUP,
+                    dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
+                }
+            }
+        };
+        inputs[1] = new NativeMethods.INPUT
+        {
+            type = NativeMethods.INPUT_KEYBOARD,
+            U = new NativeMethods.INPUT_UNION
+            {
+                ki = new NativeMethods.KEYBDINPUT
+                {
+                    wVk = (ushort)Keys.RShiftKey,
+                    wScan = 0x36,
+                    dwFlags = NativeMethods.KEYEVENTF_KEYUP,
+                    dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
+                }
+            }
+        };
+        NativeMethods.SendInput(2, inputs, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
     }
 
     public static void ReleaseAltKeysHardware()

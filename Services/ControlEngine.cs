@@ -206,6 +206,8 @@ public class ControlEngine : IDisposable
                     InputSimulator.ReleaseShiftKeysHardware();
                     Thread.Sleep(15);
                     InputSimulator.SendRightClick(25);
+                    Thread.Sleep(10);
+                    InputSimulator.ReleaseShiftKeysHardware();
                 });
             });
 
@@ -225,12 +227,11 @@ public class ControlEngine : IDisposable
 
     private void ExitFlagMode()
     {
-        if (_isFlagModeActive)
-        {
-            _isFlagModeActive = false;
-            ReleaseAllFlagArrowKeys();
-            InputSimulator.ReleaseShiftKeysHardware();
-        }
+        _isFlagModeActive = false;
+        ReleaseAllFlagArrowKeys();
+        _isPhysicalShiftDown = false;
+        _isShiftTemporarilyReleasedForMouse = false;
+        InputSimulator.ReleaseShiftKeysHardware();
     }
 
     private bool OnMiddleClickAction(int msg)
@@ -410,16 +411,13 @@ public class ControlEngine : IDisposable
                            (NativeMethods.GetAsyncKeyState((int)Keys.RControlKey) & 0x8000) != 0 ||
                            (NativeMethods.GetKeyState((int)Keys.ControlKey) & 0x8000) != 0;
 
-        bool shiftPressed = _isPhysicalShiftDown ||
-                            (NativeMethods.GetAsyncKeyState((int)Keys.ShiftKey) & 0x8000) != 0 ||
-                            (NativeMethods.GetAsyncKeyState((int)Keys.LShiftKey) & 0x8000) != 0 ||
-                            (NativeMethods.GetAsyncKeyState((int)Keys.RShiftKey) & 0x8000) != 0 ||
-                            (NativeMethods.GetKeyState((int)Keys.ShiftKey) & 0x8000) != 0;
-
-        if (shiftPressed)
-        {
-            _isPhysicalShiftDown = true;
-        }
+        bool shiftPressed = _isPhysicalShiftDown || _isFlagModeActive ||
+                            (!_isShiftTemporarilyReleasedForMouse && (
+                                (NativeMethods.GetAsyncKeyState((int)Keys.ShiftKey) & 0x8000) != 0 ||
+                                (NativeMethods.GetAsyncKeyState((int)Keys.LShiftKey) & 0x8000) != 0 ||
+                                (NativeMethods.GetAsyncKeyState((int)Keys.RShiftKey) & 0x8000) != 0 ||
+                                (NativeMethods.GetKeyState((int)Keys.ShiftKey) & 0x8000) != 0
+                            ));
 
         bool altPressed = _isAltDown ||
                           (NativeMethods.GetAsyncKeyState((int)Keys.Menu) & 0x8000) != 0 ||
@@ -548,9 +546,9 @@ public class ControlEngine : IDisposable
         {
             if (isKeyDown)
             {
-                _isFlagModeActive = !_isFlagModeActive;
-                if (_isFlagModeActive)
+                if (!_isFlagModeActive)
                 {
+                    _isFlagModeActive = true;
                     Log("[Đặt cờ] BẬT chế độ đặt cờ -> Giữ SHIFT down, AWSD chuyển thành 4 phím mũi tên", Color.Teal);
                     MidiPlayer.PlayToggleOnSound();
                     RunActionSync(() =>
