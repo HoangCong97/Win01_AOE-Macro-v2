@@ -58,6 +58,15 @@ public class MouseHookManager : IDisposable
     {
         if (nCode >= 0)
         {
+            int msg = wParam.ToInt32();
+
+            // Tối ưu cực hạn: Bỏ qua ngay lập tức mọi thông điệp di chuyển chuột (WM_MOUSEMOVE = 0x0200)
+            // Không cần marshal struct, không tốn CPU/GC, giúp kéo cửa sổ và lia chuột siêu mượt 1000Hz+
+            if (msg == 0x0200)
+            {
+                return NativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+            }
+
             NativeMethods.MOUSEINPUT mouse = Marshal.PtrToStructure<NativeMethods.MOUSEINPUT>(lParam);
 
             // Skip simulated mouse events from macro
@@ -66,13 +75,11 @@ public class MouseHookManager : IDisposable
                 return NativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
 
-            // Chặn toàn bộ thao tác chuột vật lý của người dùng khi đang khóa chuột
+            // Chặn toàn bộ thao tác click chuột vật lý của người dùng khi đang khóa chuột
             if (MouseLockManager.IsLocked)
             {
                 return (IntPtr)1;
             }
-
-            int msg = wParam.ToInt32();
 
             if (msg == 0x0207) // WM_MBUTTONDOWN
             {

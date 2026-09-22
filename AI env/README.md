@@ -130,6 +130,8 @@ Phím `Windows` kích hoạt chuỗi macro 3 bước để chuẩn bị lên đ�
 * **Khóa chuột & Bù trừ chuyển động bằng Raw Input (`MouseLockManager`)**:
   * Khi thực hiện các macro nhạy cảm với chuột như `F3` (click nút ngoại giao), `F4` (điều hướng menu Timeline F10), và `Numpad 1..5` (click ô biểu tượng xin quân lẻ): Macro sử dụng Win32 `ClipCursor` để ghim chuột vào tọa độ 1x1 pixel và chặn toàn bộ các click chuột vật lý trong `WH_MOUSE_LL` hook để tránh bấm nhầm làm hỏng thao tác.
   * Đồng thời, một cửa sổ ẩn toàn cục lắng nghe `WM_INPUT` (`RegisterRawInputDevices` với cờ `RIDEV_INPUTSINK`) vẫn liên tục nhận các xung dịch chuyển tương đối `(lLastX, lLastY)` từ cảm biến chuột vật lý bất chấp việc con trỏ màn hình đang bị `ClipCursor` ghim lại.
-  * Khi macro kết thúc, hệ thống nhả `ClipCursor(IntPtr.Zero)` và tự động di chuyển con trỏ tới `(initialX + deltaX, initialY + deltaY)`, mang lại trải nghiệm lia chuột mượt mà và không bao giờ bị giật lùi vị trí của game thủ.
+* **Tách Hooks và Raw Input sang Background STA Thread (`AoeMacroHookThread`)**:
+  * Các hook cấp thấp `WH_MOUSE_LL` và `WH_KEYBOARD_LL` hoạt động đồng bộ với Windows kernel. Nếu đặt trên UI Thread của Form, mỗi chuyển động chuột ở tần số cao (1000Hz+) sẽ buộc OS context-switch liên tục vào UI Thread, làm ngắt quãng vòng lặp kéo cửa sổ `DefWindowProc(SC_MOVE)` và gây hiện tượng cửa sổ bị khựng/lag/chậm.
+  * Vì vậy, toàn bộ Hook và `RawInputReceiver` bắt buộc phải chạy trên một luồng STA nền độc lập có message pump riêng (`Application.Run(_hookContext)`), giải phóng 100% UI Thread để cửa sổ giao diện di chuyển mượt mà ở tần số quét màn hình tối đa.
 
 ## 5. Chỉ cần build thành công, không cần test, người dùng sẽ test

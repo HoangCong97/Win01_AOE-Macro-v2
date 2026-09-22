@@ -13,6 +13,13 @@ public partial class MainForm : Form
     public MainForm()
     {
         InitializeComponent();
+
+        // Bật Double Buffering toàn diện để cửa sổ kéo mượt mà, triệt tiêu khựng giật
+        this.DoubleBuffered = true;
+        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+        EnableDoubleBuffer(pnlOuterBorder);
+        EnableDoubleBuffer(pnlKeyboardGrid);
+
         if (File.Exists("app_icon.ico"))
         {
             try { this.Icon = new Icon("app_icon.ico"); } catch { }
@@ -53,6 +60,16 @@ public partial class MainForm : Form
         _controlEngine.Stop();
         _controlEngine.Dispose();
         base.OnFormClosing(e);
+    }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            CreateParams cp = base.CreateParams;
+            cp.Style |= 0x02000000; // WS_CLIPCHILDREN: Loại bỏ vùng control con khi vẽ nền, tránh repaint thừa
+            return cp;
+        }
     }
 
     private void InitializeKeyMappings()
@@ -380,5 +397,15 @@ public partial class MainForm : Form
     {
         rtbLog.Clear();
         AppendLog("Đã xóa nhật ký.", Color.Gray);
+    }
+
+    private static void EnableDoubleBuffer(Control ctrl)
+    {
+        try
+        {
+            typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.SetValue(ctrl, true, null);
+        }
+        catch { }
     }
 }

@@ -84,11 +84,73 @@ public class ControlEngine : IDisposable
         Log($"[Cấu hình] Đã cài đặt thời gian đếm hạn ruộng thành: {seconds} giây.", Color.DarkCyan);
     }
 
+    private Thread? _hookThread;
+    private ApplicationContext? _hookContext;
+    private SynchronizationContext? _hookSyncContext;
+
+    private void StartHooks()
+    {
+        if (_hookThread != null) return;
+
+        using var readyEvent = new ManualResetEventSlim(false);
+        _hookThread = new Thread(() =>
+        {
+            _hookContext = new ApplicationContext();
+            _hookSyncContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
+            _keyboardHook.Start();
+            _mouseHook.Start();
+            readyEvent.Set();
+
+            Application.Run(_hookContext);
+
+            _mouseHook.Stop();
+            _keyboardHook.Stop();
+        })
+        {
+            IsBackground = true,
+            Name = "LowLevelHookThread"
+        };
+        _hookThread.SetApartmentState(ApartmentState.STA);
+        _hookThread.Start();
+        readyEvent.Wait(2000);
+    }
+
+    private void StopHooks()
+    {
+        if (_hookContext != null)
+        {
+            try
+            {
+                _hookContext.ExitThread();
+            }
+            catch { }
+            _hookContext = null;
+        }
+        _hookThread = null;
+        _hookSyncContext = null;
+    }
+
+    private void PromoteHooks()
+    {
+        if (_hookSyncContext != null)
+        {
+            _hookSyncContext.Post(_ =>
+            {
+                _keyboardHook.PromoteHookToTop();
+                _mouseHook.PromoteHookToTop();
+            }, null);
+        }
+        else
+        {
+            _keyboardHook.PromoteHookToTop();
+            _mouseHook.PromoteHookToTop();
+        }
+    }
+
     public void Start()
     {
         MouseLockManager.Initialize();
-        _keyboardHook.Start();
-        _mouseHook.Start();
+        StartHooks();
         _gameWatcher.Start();
         SetState(MacroState.Disabled, "Khởi tạo hệ thống: Trạng thái [Tắt] (Bấm F1 để bật Macro).");
     }
@@ -114,8 +176,7 @@ public class ControlEngine : IDisposable
         _isFarmRefreshActive = false;
         _lastFarmRefreshTime = DateTime.MinValue;
         _gameWatcher.Stop();
-        _mouseHook.Stop();
-        _keyboardHook.Stop();
+        StopHooks();
     }
 
     public void ToggleF1()
@@ -123,8 +184,7 @@ public class ControlEngine : IDisposable
         if (_currentState == MacroState.Disabled)
         {
             MidiPlayer.PlayToggleOnSound();
-            _keyboardHook.PromoteHookToTop();
-            _mouseHook.PromoteHookToTop();
+            PromoteHooks();
             if (_gameWatcher.IsInGame)
             {
                 SetState(MacroState.Active, "Macro BẬT (F1) -> Trạng thái: [Hoạt động]");
@@ -407,8 +467,7 @@ public class ControlEngine : IDisposable
         }
         else
         {
-            _keyboardHook.PromoteHookToTop();
-            _mouseHook.PromoteHookToTop();
+            PromoteHooks();
 
             if (_currentState == MacroState.SuspendedOutOfGame)
             {

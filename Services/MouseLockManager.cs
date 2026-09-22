@@ -10,6 +10,7 @@ namespace AOEKeyboardMacroPro.Services;
 public static class MouseLockManager
 {
     private static readonly object _lockObj = new();
+    private static Thread? _rawInputThread;
     private static RawInputReceiver? _receiver;
     private static int _accumulatedDeltaX = 0;
     private static int _accumulatedDeltaY = 0;
@@ -20,15 +21,29 @@ public static class MouseLockManager
     public static bool IsLocked { get; private set; } = false;
 
     /// <summary>
-    /// Khởi tạo bộ thu Raw Input trên luồng giao diện (UI Thread).
+    /// Khởi tạo bộ thu Raw Input trên một luồng nền độc lập (tách rời hoàn toàn khỏi UI Thread của MainForm)
+    /// để không làm nghẽn hoặc giật lag giao diện người dùng khi kéo cửa sổ hoặc lia chuột tốc độ cao.
     /// </summary>
     public static void Initialize()
     {
         lock (_lockObj)
         {
-            if (_receiver == null)
+            if (_rawInputThread == null)
             {
-                _receiver = new RawInputReceiver();
+                using var initEvent = new ManualResetEventSlim(false);
+                _rawInputThread = new Thread(() =>
+                {
+                    _receiver = new RawInputReceiver();
+                    initEvent.Set();
+                    Application.Run();
+                })
+                {
+                    IsBackground = true,
+                    Name = "RawInputReceiverThread"
+                };
+                _rawInputThread.SetApartmentState(ApartmentState.STA);
+                _rawInputThread.Start();
+                initEvent.Wait(2000);
             }
         }
     }
@@ -153,7 +168,7 @@ public static class MouseLockManager
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == NativeMethods.WM_INPUT && !_disposed)
+            if (m.Msg == NativeMethods.WM_INPUT && !_disposed && IsLocked)
             {
                 ProcessRawInput(m.LParam);
             }
