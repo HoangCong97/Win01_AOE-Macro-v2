@@ -271,8 +271,8 @@ public class FastBuildManager
             InputSimulator.SendKeyPress((ushort)Keys.Escape, KeyPressHoldMs);
             Thread.Sleep(InterKeyDelayMs);
 
-            // 2. Thực thi click chuột phải (di chuyển / chỉ định lệnh trong game)
-            InputSimulator.SendRightClick(20);
+            // 2. Thực thi click chuột phải tự nhả siêu nhanh 1-2ms (di chuyển / chỉ định lệnh trong game)
+            InputSimulator.SendRightClickFast(2);
         });
     }
 

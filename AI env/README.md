@@ -116,6 +116,10 @@ Phím `Windows` kích hoạt chuỗi macro 3 bước để chuẩn bị lên đ�
   * `6`: Chọn lại đạo quân 6 ban đầu.
 * **Click giữ chuột giữa**: Lặp lại chuỗi `[CTRL + 6 -> Click chuột trái -> Delete -> 6]` liên tục ở tốc độ cao (~10 lần/giây) cho phép người chơi vừa giữ vừa lia chuột để xóa liên hoàn nhiều móng/ruộng/tường thành cho tới khi nhả nút chuột giữa.
 
+### 3.11. Chức năng: Tự nhả chuột phải (Auto-Release Right Click)
+* **Cơ chế**: Khi người chơi click chuột phải trong trận đấu game AOE (`IsInGame` & `Active`), macro can thiệp chặn hoàn toàn sự kiện chuột phải vật lý (cả Down và Up) và phát ra một cú click chuột phải phần cứng tự động nhả ngay lập tức sau 1-2ms (sử dụng `Stopwatch` nano-giây kết hợp `Thread.SpinWait`).
+* **Mục đích**: Giúp thao tác nhấp nhả điều khiển quân, ra lệnh tấn công, di chuyển đạt tốc độ tối đa, loại bỏ hoàn toàn hiện tượng kẹt/giữ chuột phải do người chơi ấn đè giữ chuột vật lý.
+
 ---
 
 ## 4. Các lưu ý kỹ thuật cho AI thế hệ sau (Technical Tips)

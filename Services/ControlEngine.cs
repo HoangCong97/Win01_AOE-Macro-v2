@@ -290,7 +290,35 @@ public class ControlEngine : IDisposable
             return true;
         }
 
-        return false;
+        // **Chức năng: Tự nhả chuột phải**
+        // Khi người dùng click chuột phải, macro can thiệp tự động nhả chuột phải ngay lập tức 1-2ms.
+        _fastBuildManager.Reset();
+        ResetAllChains();
+
+        bool isFarmRefreshWindow = _isFarmRefreshActive && (DateTime.Now - _lastFarmRefreshTime).TotalSeconds <= 6.0;
+        bool shouldReleaseShift = _isPhysicalShiftDown && isFarmRefreshWindow;
+
+        Task.Run(() =>
+        {
+            if (shouldReleaseShift)
+            {
+                InputSimulator.ReleaseShiftKeysHardware();
+                Thread.Sleep(5);
+            }
+
+            InputSimulator.SendRightClickFast(2); // Giữ 1-2ms rồi nhả ngay lập tức
+
+            if (shouldReleaseShift)
+            {
+                Thread.Sleep(5);
+                if (_currentState == MacroState.Active && _gameWatcher.IsInGame && _isPhysicalShiftDown)
+                {
+                    InputSimulator.SendKeyDown((ushort)Keys.ShiftKey);
+                }
+            }
+        });
+
+        return true;
     }
 
     private void ReleaseAllFlagArrowKeys()

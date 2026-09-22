@@ -44,9 +44,7 @@
 **Chức năng: Xây các loại nhà nhanh**
 *Mô tả cơ chế hoạt động:*
 - Nhấn phím đơn (Tap): Thực thi phím xây dựng tương ứng (Ví dụ E: [B -> E]). Trỏ chuột hiển thị móng nhà để người chơi click chuột trái đặt móng. Khi click đặt móng xong, kết thúc trạng thái đặt nhà.
-- Nhấn giữ phím (Hold): Bắt đầu gửi [B -> Key] (Ví dụ E: [B -> E]), sau đó mỗi lần người dùng click chuột trái đặt móng, hệ thống tự động nhả chuột hộ người chơi và gửi tiếp [B -> Key] để lấy móng mới. Vòng lặp chờ click chuột -> gọi móng mới này duy trì liên tục cho tới khi người dùng nhả phím.
-- Sau khi nhả giữ phím: Hệ thống tự động ấn thêm phím [ESC] để hủy móng thừa đang lơ lửng trên con trỏ chuột.
-- Hủy chức năng xây nhanh bằng chuột phải: Nếu đang trong chế độ giữ phím xây nhanh (hoặc đang có móng), khi người dùng ấn chuột phải, macro tự động ấn [ESC] để hủy móng và thực thi [Click Chuột Phải] cho người chơi (di chuyển/tấn công sạch sẽ).
+- Nhấn giữ phím (Hold): Bắt đầu gửi [B -> Key] (Ví dụ E: [B -> E]), sau đó mỗi lần người dùng click chuột trái đặt móng, hệ thống tự động gửi tiếp [B -> Key] để lấy móng mới. Vòng lặp chờ click chuột -> gọi móng mới này duy trì liên tục cho tới khi người dùng nhả phím.
 - Chuyển đổi loại nhà: Khi đang trong trạng thái xây nhà nhanh mà đổi sang bấm phím xây nhà khác, hệ thống tự động gửi [ESC] trước để hủy móng cũ rồi mới gửi lệnh xây nhà mới.
 - Hủy móng: Khi người dùng click chuột phải, nhấn ESC hoặc chuyển cửa sổ, trạng thái xây nhà sẽ được hủy và reset về bình thường.
 
@@ -213,6 +211,6 @@ Ruộng F2: G
 **Chức năng: Xin quân lẻ**
 *Đây là một chức năng cực kỳ phức tạp*
 
-**Chức năng: Chuột phải không giữ**
-Chức năng này khiến chuột phải khi click sẽ tự động nhả ngay lập tức cho dù user ấn giữ, nó giúp thao tác nhấp nhả nhanh nhất có thể, tốt nhất là không độ trễn
+**Chức năng: Tự nhả chuột phải**
+Khi người dùng click chuột phải, macro phải can thiệt tự động nhả chuột phải ngay lập tức 1-2ms.
 ```

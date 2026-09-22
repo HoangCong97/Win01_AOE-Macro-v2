@@ -349,6 +349,58 @@ public static class InputSimulator
         NativeMethods.SendInput(1, inputsUp, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
     }
 
+    private static readonly object _rightClickLock = new();
+
+    /// <summary>
+    /// Gửi một cú click chuột phải tự nhả siêu nhanh (chính xác 1-2ms) bằng Stopwatch nano-giây.
+    /// Dù người chơi có ấn đè giữ chuột phải vật lý thì game chỉ nhận đúng 1 cú click nhấp nhả 1-2ms.
+    /// </summary>
+    public static void SendRightClickFast(int holdTimeMs = 2)
+    {
+        lock (_rightClickLock)
+        {
+            NativeMethods.INPUT[] inputsDown = new NativeMethods.INPUT[1];
+            inputsDown[0] = new NativeMethods.INPUT
+            {
+                type = NativeMethods.INPUT_MOUSE,
+                U = new NativeMethods.INPUT_UNION
+                {
+                    mi = new NativeMethods.MOUSEINPUT
+                    {
+                        dwFlags = NativeMethods.MOUSEEVENTF_RIGHTDOWN,
+                        dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
+                    }
+                }
+            };
+            NativeMethods.SendInput(1, inputsDown, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
+
+            if (holdTimeMs > 0)
+            {
+                long startTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+                long targetTicks = startTicks + (long)(System.Diagnostics.Stopwatch.Frequency * (holdTimeMs / 1000.0));
+                while (System.Diagnostics.Stopwatch.GetTimestamp() < targetTicks)
+                {
+                    Thread.SpinWait(10);
+                }
+            }
+
+            NativeMethods.INPUT[] inputsUp = new NativeMethods.INPUT[1];
+            inputsUp[0] = new NativeMethods.INPUT
+            {
+                type = NativeMethods.INPUT_MOUSE,
+                U = new NativeMethods.INPUT_UNION
+                {
+                    mi = new NativeMethods.MOUSEINPUT
+                    {
+                        dwFlags = NativeMethods.MOUSEEVENTF_RIGHTUP,
+                        dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
+                    }
+                }
+            };
+            NativeMethods.SendInput(1, inputsUp, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
+        }
+    }
+
     public static void SendRightUp()
     {
         NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[1];
