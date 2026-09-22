@@ -9,6 +9,8 @@ public class ControlEngine : IDisposable
     private readonly MouseHookManager _mouseHook = new();
     private readonly GameStateWatcher _gameWatcher = new();
     private readonly FarmTimerManager _farmTimerManager = new();
+    private readonly VayEManager _vayEManager = new();
+    private readonly DeleteManager _deleteManager;
     private readonly System.Windows.Forms.Timer _f2LoopTimer = new();
     private readonly SemaphoreSlim _actionLock = new(1, 1);
 
@@ -35,16 +37,12 @@ public class ControlEngine : IDisposable
     private bool _isAltCombo = false;
     private DateTime _altPressTime = DateTime.MinValue;
 
-    // Vẩy E tracking state
-    private bool _isVayEActive = false;
-    private int _vayECount = 0;
-    private Keys _previousMilitaryGroup = Keys.D1;
-
     // Đạo ruộng nhanh tracking state
     private int _ctrlFCount = 0;
     private int _ctrlGCount = 0;
     private int _activeFarmGroup = 0; // 0: None, 1: Ruộng 1 (F), 2: Ruộng 2 (G)
     private bool _isPhysicalShiftDown = false;
+    private bool _isPhysicalCtrlDown = false;
     private bool _isRightMouseDown = false;
     private bool _isShiftTemporarilyReleasedForMouse = false;
 
@@ -63,6 +61,7 @@ public class ControlEngine : IDisposable
 
     public ControlEngine()
     {
+        _deleteManager = new DeleteManager(_actionLock);
         _keyboardHook.KeyActionOccurred += OnKeyAction;
         _mouseHook.MouseClicked += OnMouseClick;
         _mouseHook.RightButtonDown += OnRightButtonDown;
@@ -87,6 +86,7 @@ public class ControlEngine : IDisposable
 
     public void Start()
     {
+        MouseLockManager.Initialize();
         _keyboardHook.Start();
         _mouseHook.Start();
         _gameWatcher.Start();
@@ -95,13 +95,18 @@ public class ControlEngine : IDisposable
 
     public void Stop()
     {
+        MouseLockManager.ForceUnlock();
+        _vayEManager.Reset();
+        _deleteManager.Reset();
         SystemPolicyManager.SetLockWorkstationDisabled(false);
         _f2LoopTimer.Stop();
         _farmTimerManager.StopAllTimersAndAlarms();
         _isPhysicalShiftDown = false;
+        _isPhysicalCtrlDown = false;
         _isRightMouseDown = false;
         _isShiftTemporarilyReleasedForMouse = false;
         InputSimulator.ReleaseShiftKeysHardware();
+        InputSimulator.ReleaseCtrlKeysHardware();
         _isAltDown = false;
         _isAltCombo = false;
         InputSimulator.ReleaseAltKeysHardware();
@@ -133,13 +138,16 @@ public class ControlEngine : IDisposable
         else
         {
             ResetAllChains();
+            _deleteManager.Reset();
             _ctrlFCount = 0;
             _ctrlGCount = 0;
             _activeFarmGroup = 0;
             _isPhysicalShiftDown = false;
+            _isPhysicalCtrlDown = false;
             _isRightMouseDown = false;
             _isShiftTemporarilyReleasedForMouse = false;
             InputSimulator.ReleaseShiftKeysHardware();
+            InputSimulator.ReleaseCtrlKeysHardware();
             _isAltDown = false;
             _isAltCombo = false;
             InputSimulator.ReleaseAltKeysHardware();
@@ -203,6 +211,24 @@ public class ControlEngine : IDisposable
             return false;
         }
 
+        // Vẩy E: Khi đang giữ CTRL sau khi ấn CTRL + E, mỗi click chuột trái sẽ là [Click -> S -> B -> E]
+        if (_vayEManager.IsActive)
+        {
+            bool isCtrlActive = _isPhysicalCtrlDown ||
+                                (NativeMethods.GetAsyncKeyState((int)Keys.ControlKey) & 0x8000) != 0 ||
+                                (NativeMethods.GetKeyState((int)Keys.ControlKey) & 0x8000) != 0;
+            if (isCtrlActive)
+            {
+                _vayEManager.HandleLeftClick(Log, RunActionSync);
+                return true;
+            }
+            else
+            {
+                _vayEManager.HandleCtrlUp(Log, RunActionSync);
+                return false;
+            }
+        }
+
         if (_isFlagModeActive)
         {
             ExitFlagMode();
@@ -251,20 +277,19 @@ public class ControlEngine : IDisposable
             return false;
         }
 
-        ResetAllChains();
-        Log("[Chức năng: Delete] Click chuột giữa -> [CTRL+6 -> Click chuột trái -> Delete -> 6]", Color.Crimson);
-        RunActionSync(() =>
+        if (msg == 0x0207) // WM_MBUTTONDOWN
         {
-            InputSimulator.SendCtrlKeyCombo((ushort)Keys.D6);
-            Thread.Sleep(15);
-            InputSimulator.SendMouseClickHold(25);
-            Thread.Sleep(15);
-            InputSimulator.SendKeyPress((ushort)Keys.Delete, 15);
-            Thread.Sleep(15);
-            InputSimulator.SendKeyPress((ushort)Keys.D6, 10);
-        });
+            ResetAllChains();
+            _deleteManager.HandleMiddleButtonDown(Log, () => _currentState == MacroState.Active && _gameWatcher.IsInGame);
+            return true;
+        }
+        else if (msg == 0x0208) // WM_MBUTTONUP
+        {
+            _deleteManager.HandleMiddleButtonUp();
+            return true;
+        }
 
-        return true;
+        return false;
     }
 
     private void ResetBuildingState()
@@ -279,11 +304,13 @@ public class ControlEngine : IDisposable
         _lastTabTime = DateTime.MinValue;
         _lastShiftMilitaryKey = Keys.None;
         _lastShiftMilitaryTime = DateTime.MinValue;
-
-        if (_isVayEActive)
+        if (!_isPhysicalCtrlDown)
         {
-            _isVayEActive = false;
-            _vayECount = 0;
+            _vayEManager.Reset();
+        }
+        if (!_deleteManager.IsHolding)
+        {
+            _deleteManager.Reset();
         }
     }
 
@@ -291,10 +318,15 @@ public class ControlEngine : IDisposable
     {
         if (!inGame)
         {
+            MouseLockManager.ForceUnlock();
+            _vayEManager.Reset();
+            _deleteManager.Reset();
             _isPhysicalShiftDown = false;
+            _isPhysicalCtrlDown = false;
             _isRightMouseDown = false;
             _isShiftTemporarilyReleasedForMouse = false;
             InputSimulator.ReleaseShiftKeysHardware();
+            InputSimulator.ReleaseCtrlKeysHardware();
             _isAltDown = false;
             _isAltCombo = false;
             InputSimulator.ReleaseAltKeysHardware();
@@ -416,7 +448,13 @@ public class ControlEngine : IDisposable
             _isPhysicalShiftDown = isKeyDown;
         }
 
-        bool ctrlPressed = (NativeMethods.GetAsyncKeyState((int)Keys.ControlKey) & 0x8000) != 0 ||
+        if (key == Keys.ControlKey || key == Keys.LControlKey || key == Keys.RControlKey)
+        {
+            _isPhysicalCtrlDown = isKeyDown;
+        }
+
+        bool ctrlPressed = _isPhysicalCtrlDown ||
+                           (NativeMethods.GetAsyncKeyState((int)Keys.ControlKey) & 0x8000) != 0 ||
                            (NativeMethods.GetAsyncKeyState((int)Keys.LControlKey) & 0x8000) != 0 ||
                            (NativeMethods.GetAsyncKeyState((int)Keys.RControlKey) & 0x8000) != 0 ||
                            (NativeMethods.GetKeyState((int)Keys.ControlKey) & 0x8000) != 0;
@@ -462,6 +500,8 @@ public class ControlEngine : IDisposable
         // Xử lý sự kiện nhả phím CTRL (CTRL KeyUp)
         if (!isKeyDown && (key == Keys.ControlKey || key == Keys.LControlKey || key == Keys.RControlKey))
         {
+            _isPhysicalCtrlDown = false;
+
             if (_ctrlFCount > 0 || _ctrlGCount > 0 || _activeFarmGroup > 0)
             {
                 Log("[Đạo ruộng] Nhả CTRL -> [CTRL up]", Color.DarkGreen);
@@ -474,24 +514,16 @@ public class ControlEngine : IDisposable
                 _activeFarmGroup = 0;
             }
 
-            if (_isVayEActive)
+            if (_vayEManager.IsActive)
             {
-                _isVayEActive = false;
-                _vayECount = 0;
-                Log($"[Vẩy E] Nhả CTRL -> Đặt móng cuối & Chọn lại đạo quân trước ({_previousMilitaryGroup})", Color.Crimson);
-                RunActionSync(() =>
-                {
-                    InputSimulator.SendMouseClickHold(25);
-                    Thread.Sleep(15);
-                    InputSimulator.SendKeyPress((ushort)_previousMilitaryGroup);
-                });
+                _vayEManager.HandleCtrlUp(Log, RunActionSync);
             }
         }
 
         // Ghi nhớ đạo quân đã chọn (1..6)
         if (isKeyDown && key >= Keys.D1 && key <= Keys.D6 && !ctrlPressed && !shiftPressed && !altPressed)
         {
-            _previousMilitaryGroup = key;
+            _vayEManager.RecordMilitaryGroup(key);
         }
 
         bool isAltKey = (key == Keys.Menu || key == Keys.LMenu || key == Keys.RMenu);
@@ -636,45 +668,10 @@ public class ControlEngine : IDisposable
         // ----------------------------------------------------
         // **Chức năng: Vẩy E** (Giữ CTRL + E)
         // ----------------------------------------------------
-        if (ctrlPressed && key == Keys.E)
+        if ((ctrlPressed || _vayEManager.IsActive) && key == Keys.E)
         {
             ResetBuildingState();
-
-            if (!_isVayEActive || _vayECount == 0)
-            {
-                _isVayEActive = true;
-                _vayECount = 1;
-                Log("[Vẩy E] Lần 1 (Giữ CTRL+E) -> 7 -> B -> E (Chọn dân đạo 7 & Lấy móng BE)", Color.Crimson);
-                RunActionSync(() =>
-                {
-                    InputSimulator.SendKeyUp((ushort)Keys.ControlKey);
-                    Thread.Sleep(5);
-                    InputSimulator.SendKeyPress((ushort)Keys.D7, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.B, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.E, 10);
-                    Thread.Sleep(5);
-                    InputSimulator.SendKeyDown((ushort)Keys.ControlKey);
-                });
-            }
-            else
-            {
-                _vayECount++;
-                Log($"[Vẩy E] Lần {_vayECount} (Giữ CTRL+E) -> Click Trái -> B -> E (Hạ móng & Lấy móng BE mới)", Color.Crimson);
-                RunActionSync(() =>
-                {
-                    InputSimulator.SendKeyUp((ushort)Keys.ControlKey);
-                    Thread.Sleep(5);
-                    InputSimulator.SendMouseClickHold(25);
-                    Thread.Sleep(15);
-                    InputSimulator.SendKeyPress((ushort)Keys.B, 10);
-                    Thread.Sleep(10);
-                    InputSimulator.SendKeyPress((ushort)Keys.E, 10);
-                    Thread.Sleep(5);
-                    InputSimulator.SendKeyDown((ushort)Keys.ControlKey);
-                });
-            }
+            _vayEManager.HandlePressE(Log, RunActionSync);
             return true;
         }
 
@@ -685,7 +682,7 @@ public class ControlEngine : IDisposable
         if (shiftPressed && key >= Keys.D1 && key <= Keys.D6)
         {
             ResetAllChains();
-            _previousMilitaryGroup = key;
+            _vayEManager.RecordMilitaryGroup(key);
             int num = (int)(key - Keys.D0);
             ushort numVk = (ushort)key;
             Log($"[Đạo quân nhanh] SHIFT+{num} -> [SHIFT+{num} -> CTRL+{num} -> SPACE]", Color.SeaGreen);
@@ -1032,7 +1029,7 @@ public class ControlEngine : IDisposable
         // **Chức năng: Xây các loại nhà nhanh** (Mẫu 1)
         // (E, R, T, V, F, G, B, N, A, S, Z, X, D, C)
         // ----------------------------------------------------
-        if (!ctrlPressed && !shiftPressed && TryGetBuildingMapping(key, out ushort firstKey, out ushort secondKey, out string buildingName))
+        if (!_vayEManager.IsActive && !_isPhysicalCtrlDown && !ctrlPressed && !shiftPressed && TryGetBuildingMapping(key, out ushort firstKey, out ushort secondKey, out string buildingName))
         {
             DateTime now = DateTime.Now;
             bool isConsecutive = (key == _lastBuildingKey) && ((now - _lastBuildingTime).TotalSeconds <= 20.0);
@@ -1163,7 +1160,7 @@ public class ControlEngine : IDisposable
 
         if (_isFlagModeActive && (key is Keys.W or Keys.A or Keys.S or Keys.D)) return true;
 
-        if (ctrlPressed || shiftPressed)
+        if (ctrlPressed || shiftPressed || _vayEManager.IsActive)
         {
             if (key is Keys.A or Keys.S or Keys.Z or Keys.X or Keys.D or Keys.C or Keys.F or Keys.G or Keys.E)
                 return true;
@@ -1290,13 +1287,16 @@ public class ControlEngine : IDisposable
         Log("[Chức năng: Mở bảng ngoại giao] (F4) -> Mở timeline [F10 -> Mũi tên xuống * 2 -> Enter]", Color.Magenta);
         RunActionSync(() =>
         {
-            InputSimulator.SendKeyPress((ushort)Keys.F10, 15);
-            Thread.Sleep(20);
-            InputSimulator.SendKeyPress((ushort)Keys.Down, 15);
-            Thread.Sleep(20);
-            InputSimulator.SendKeyPress((ushort)Keys.Down, 15);
-            Thread.Sleep(20);
-            InputSimulator.SendKeyPress((ushort)Keys.Enter, 15);
+            MouseLockManager.ExecuteLockedAction(() =>
+            {
+                InputSimulator.SendKeyPress((ushort)Keys.F10, 15);
+                Thread.Sleep(20);
+                InputSimulator.SendKeyPress((ushort)Keys.Down, 15);
+                Thread.Sleep(20);
+                InputSimulator.SendKeyPress((ushort)Keys.Down, 15);
+                Thread.Sleep(20);
+                InputSimulator.SendKeyPress((ushort)Keys.Enter, 15);
+            }, pinAtCurrentPos: true);
         });
     }
 
@@ -1308,6 +1308,7 @@ public class ControlEngine : IDisposable
     public void Dispose()
     {
         Stop();
+        MouseLockManager.Dispose();
         _f2LoopTimer.Dispose();
         _farmTimerManager.Dispose();
         _gameWatcher.Dispose();

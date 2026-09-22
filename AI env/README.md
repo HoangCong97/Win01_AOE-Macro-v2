@@ -28,8 +28,8 @@ Dự án được viết theo cấu trúc tối giản không dùng file Designe
 ### 3.1. Kích hoạt & Trạng thái (F1 Toggle & Window Filter & Utility keys)
 * Phím **`F1`** bật/tắt toàn bộ macro. 
 * Phím **`F12`**: Tạm dừng game (gửi phím pause F3 gốc).
-* Phím **`F3`**: Click nút Diplomacy (bảng ngoại giao).
-* Phím **`F4`**: Mở timeline [`F10 -> Mũi tên xuống * 2 -> Enter`].
+* Phím **`F3`**: Click nút Diplomacy (bảng ngoại giao). Tự động khóa chuột (ghim tại nút ngoại giao và chặn bấm chuột nhầm) trong quá trình hover/click, sau khi hoàn thành sẽ trả lại chuột và bù trừ chính xác quãng đường di chuyển vật lý của người dùng.
+* Phím **`F4`**: Mở timeline [`F10 -> Mũi tên xuống * 2 -> Enter`]. Tự động ghim chuột tại chỗ và chặn click trong thời gian gửi phím để tránh trôi trúng menu hoặc hủy menu game, sau đó trả chuột về vị trí đã bù trừ quãng đường di chuyển của người dùng.
 * Khi nhấn **`Enter`** (để chat trong game): macro tự động chuyển sang **Tạm dừng (Suspended)** để gõ chữ bình thường. Khi nhấn `Enter` hoặc `Esc` để thoát chat, macro tự động bật lại.
 * Khi Alt-Tab ra ngoài game (cửa sổ Age of Empires không active): macro chuyển sang **Tạm dừng (Unfocused)** và bypass toàn bộ phím tắt.
 
@@ -47,10 +47,11 @@ Dự án được viết theo cấu trúc tối giản không dùng file Designe
 * `` ` `` (Backtick / Oemtilde) ➡️ `H -> C` (Xin dân nhanh từ nhà chính)
 * `J` ➡️ `C` (Xin dân C trực tiếp tại nhà chính đang chọn)
 * `W` ➡️ `S` (Dừng quân / Stop)
-* **Vẫy E (`Q`)**:
-  * Nhấn lần đầu: `[Chọn một đạo ruộng bất kỳ -> B -> E]` (Sends `FarmGroup` -> `B -> E` để đặt móng nhà dân).
-  * Nhấn liên tiếp (<=20s): `[Chuột trái -> B -> E]` (Tự động click chuột trái để đặt móng trước đó xuống và đặt tiếp móng BE mới mà không cần re-select đạo ruộng).
-  * Click bất kỳ nút chuột nào hoặc nhấn phím khác sẽ reset chuỗi.
+* **Vẩy E (`CTRL + E`)**:
+  * Khi ấn giữ `CTRL + E` (nhả `E` nhưng vẫn giữ `CTRL`): `[7 -> B -> E]` (Chọn dân đạo 7 và gọi móng nhà dân BE).
+  * Mỗi lần click chuột trái (hoặc bấm tiếp `E` khi vẫn giữ `CTRL`): `[Click -> S -> S -> B -> E]` (Tự động click chuột trái đặt móng trước, 2 lần phím `S` dừng dân chắc chắn không cho chạy ra xây móng, và phím `B -> E` lấy móng BE mới).
+  * Cho tới khi thả `CTRL`: `[ESC -> Chọn lại đạo quân trước đó]` (Hủy móng BE đang treo và chọn lại đạo quân 1..6 đang điều khiển trước đó).
+  * Hủy chuỗi khi bấm phím khác hoặc chuyển cửa sổ.
 * Phím Mẫu 1 (`E`, `R`, `T`, `V`, `B`, `N`, `F`, `G`):
   * Lần đầu bấm: Xây `BE`, `BS`, `BG`, `BM`, `BC`, `BN`, `BF` (đạo 1), `BF` (đạo 2).
   * Nhấn liên tiếp: Tự động click chuột trái trước rồi gửi chuỗi phím xây dựng tương ứng.
@@ -83,6 +84,18 @@ Phím `Windows` kích hoạt chuỗi macro 3 bước để chuẩn bị lên đ�
   * Hủy chuỗi liên tiếp (quay lại lần đầu) khi nhấn phím khác bất kỳ, click chuột (trái, phải, giữa) hoặc quá 20s.
   * **Lưu ý**: Không chặn tính năng chuyển cửa sổ `ALT + TAB` của hệ điều hành.
 
+### 3.8. Xin quân lẻ / Click biểu tượng lệnh (Numpad 1..5)
+* **Phím `Numpad 1..5`**: Tự động click vào 5 ô biểu tượng hành động/xin quân lẻ ở thanh điều khiển phía dưới màn hình (`X = Offset + (slot - 1) * Width, Y = H - Offset`).
+* **Cơ chế khóa chuột & bù di chuyển**: Áp dụng `MouseLockManager.ExecuteLockedAction`, ghim chuột vào đúng ô biểu tượng và chặn click người dùng trong 30ms thực thi, sau đó lập tức trả chuột về vị trí cũ kèm bù đắp toàn bộ chuyển động người dùng đã lia chuột.
+
+### 3.9. Chức năng: Delete (Chuột giữa / Middle Mouse)
+* **Click chuột giữa**: Thực hiện 1 chu kỳ `[CTRL + 6 -> Click chuột trái -> Delete -> 6]`.
+  * `CTRL + 6`: Lưu đơn vị/đạo quân đang chọn vào đạo 6.
+  * `Click chuột trái`: Chọn đối tượng/móng nhà/ruộng dưới con trỏ chuột.
+  * `Delete`: Xóa đối tượng vừa click.
+  * `6`: Chọn lại đạo quân 6 ban đầu.
+* **Click giữ chuột giữa**: Lặp lại chuỗi `[CTRL + 6 -> Click chuột trái -> Delete -> 6]` liên tục ở tốc độ cao (~10 lần/giây) cho phép người chơi vừa giữ vừa lia chuột để xóa liên hoàn nhiều móng/ruộng/tường thành cho tới khi nhả nút chuột giữa.
+
 ---
 
 ## 4. Các lưu ý kỹ thuật cho AI thế hệ sau (Technical Tips)
@@ -90,3 +103,9 @@ Phím `Windows` kích hoạt chuỗi macro 3 bước để chuẩn bị lên đ�
 * **Quản lý phím Ctrl vật lý**: Trong các lệnh `Ctrl + Key` và `Ctrl + F/G`, việc mô phỏng phím bấm cần kiểm tra trạng thái phím Ctrl vật lý qua `GetKeyState(0x11)`. Nếu người chơi đang giữ phím Ctrl thì không được gửi lệnh nhả Ctrl giả lập bừa bãi tránh xung đột thao tác của người chơi.
 * **Scan Codes vs Virtual Keys**: Khi gửi phím vào AOE, phải sử dụng Scan Codes (VD: `wScan` và cờ `KEYEVENTF_SCANCODE` = 0x0008). AOE sử dụng DirectInput nên sẽ bỏ qua các mô phỏng bằng Virtual Key đơn thuần.
 * **Thời gian trễ ngẫu nhiên (Anti-Cheat Jitter)**: Để tránh bị phát hiện bởi các phần mềm chống gian lận (anti-cheat) quét dấu hiệu thời gian đều đặn cố định (ví dụ luôn là `5ms`), toàn bộ các lệnh trễ mô phỏng phím/chuột đã được thay thế bằng hàm `RandomSleep(int milliseconds)`, tự động tạo biến thiên ngẫu nhiên `+-5ms` (tối thiểu 1ms).
+* **Khóa chuột & Bù trừ chuyển động bằng Raw Input (`MouseLockManager`)**:
+  * Khi thực hiện các macro nhạy cảm với chuột như `F3` (click nút ngoại giao), `F4` (điều hướng menu Timeline F10), và `Numpad 1..5` (click ô biểu tượng xin quân lẻ): Macro sử dụng Win32 `ClipCursor` để ghim chuột vào tọa độ 1x1 pixel và chặn toàn bộ các click chuột vật lý trong `WH_MOUSE_LL` hook để tránh bấm nhầm làm hỏng thao tác.
+  * Đồng thời, một cửa sổ ẩn toàn cục lắng nghe `WM_INPUT` (`RegisterRawInputDevices` với cờ `RIDEV_INPUTSINK`) vẫn liên tục nhận các xung dịch chuyển tương đối `(lLastX, lLastY)` từ cảm biến chuột vật lý bất chấp việc con trỏ màn hình đang bị `ClipCursor` ghim lại.
+  * Khi macro kết thúc, hệ thống nhả `ClipCursor(IntPtr.Zero)` và tự động di chuyển con trỏ tới `(initialX + deltaX, initialY + deltaY)`, mang lại trải nghiệm lia chuột mượt mà và không bao giờ bị giật lùi vị trí của game thủ.
+
+## 5. Chỉ cần build thành công, không cần test, người dùng sẽ test

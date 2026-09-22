@@ -64,33 +64,40 @@ public class MouseHookManager : IDisposable
                 return NativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
 
+            // Chặn toàn bộ thao tác chuột vật lý của người dùng khi đang khóa chuột
+            if (MouseLockManager.IsLocked)
+            {
+                return (IntPtr)1;
+            }
+
             int msg = wParam.ToInt32();
 
             if (msg == 0x0207) // WM_MBUTTONDOWN
             {
-                MouseClicked?.Invoke();
                 if (MiddleClickActionOccurred != null && MiddleClickActionOccurred.Invoke(msg))
                 {
                     _isMiddleDownIntercepted = true;
                     return (IntPtr)1; // Suppress original middle mouse down
                 }
+                MouseClicked?.Invoke();
             }
             else if (msg == 0x0208) // WM_MBUTTONUP
             {
                 if (_isMiddleDownIntercepted)
                 {
                     _isMiddleDownIntercepted = false;
+                    MiddleClickActionOccurred?.Invoke(msg);
                     return (IntPtr)1; // Suppress original middle mouse up
                 }
             }
             else if (msg == 0x0201) // WM_LBUTTONDOWN
             {
-                MouseClicked?.Invoke();
                 if (LeftClickActionOccurred != null && LeftClickActionOccurred.Invoke(msg))
                 {
                     _isLeftDownIntercepted = true;
                     return (IntPtr)1; // Suppress original left mouse down
                 }
+                MouseClicked?.Invoke();
             }
             else if (msg == 0x0202) // WM_LBUTTONUP
             {

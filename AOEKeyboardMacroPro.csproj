@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>AOEKeyboardMacroPro_v30</AssemblyName>
+    <AssemblyName>AOEKeyboardMacroPro_v31</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app_icon.ico</ApplicationIcon>
   </PropertyGroup>

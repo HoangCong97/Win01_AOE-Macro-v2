@@ -27,7 +27,7 @@ public static class InputSimulator
         }
 
         ushort scanCode = (ushort)NativeMethods.MapVirtualKey(vkCode, NativeMethods.MAPVK_VK_TO_VSC);
-        uint flags = 0;
+        uint flags = NativeMethods.KEYEVENTF_SCANCODE;
         if (IsExtendedKey(vkCode))
         {
             flags |= NativeMethods.KEYEVENTF_EXTENDEDKEY;
@@ -56,7 +56,7 @@ public static class InputSimulator
     public static void SendKeyUp(ushort vkCode)
     {
         ushort scanCode = (ushort)NativeMethods.MapVirtualKey(vkCode, NativeMethods.MAPVK_VK_TO_VSC);
-        uint flags = NativeMethods.KEYEVENTF_KEYUP;
+        uint flags = NativeMethods.KEYEVENTF_KEYUP | NativeMethods.KEYEVENTF_SCANCODE;
         if (IsExtendedKey(vkCode))
         {
             flags |= NativeMethods.KEYEVENTF_EXTENDEDKEY;
@@ -138,6 +138,37 @@ public static class InputSimulator
         SendKeyUp((ushort)Keys.ControlKey);
         SendKeyUp((ushort)Keys.LControlKey);
         SendKeyUp((ushort)Keys.RControlKey);
+
+        NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[2];
+        inputs[0] = new NativeMethods.INPUT
+        {
+            type = NativeMethods.INPUT_KEYBOARD,
+            U = new NativeMethods.INPUT_UNION
+            {
+                ki = new NativeMethods.KEYBDINPUT
+                {
+                    wVk = (ushort)Keys.LControlKey,
+                    wScan = 0x1D,
+                    dwFlags = NativeMethods.KEYEVENTF_KEYUP | NativeMethods.KEYEVENTF_SCANCODE,
+                    dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
+                }
+            }
+        };
+        inputs[1] = new NativeMethods.INPUT
+        {
+            type = NativeMethods.INPUT_KEYBOARD,
+            U = new NativeMethods.INPUT_UNION
+            {
+                ki = new NativeMethods.KEYBDINPUT
+                {
+                    wVk = (ushort)Keys.RControlKey,
+                    wScan = 0x1D,
+                    dwFlags = NativeMethods.KEYEVENTF_KEYUP | NativeMethods.KEYEVENTF_EXTENDEDKEY | NativeMethods.KEYEVENTF_SCANCODE,
+                    dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
+                }
+            }
+        };
+        NativeMethods.SendInput(2, inputs, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
     }
 
     public static void ReleaseShiftKeysHardware()
@@ -329,19 +360,18 @@ public static class InputSimulator
             NativeMethods.POINT pt = new NativeMethods.POINT { X = W - 90, Y = 10 };
             if (NativeMethods.ClientToScreen(hwnd, ref pt))
             {
-                if (NativeMethods.GetCursorPos(out NativeMethods.POINT originalPt))
+                MouseLockManager.ExecuteLockedAction(() =>
                 {
-                    // Move to Diplomacy button
+                    // Di chuyển tới nút Diplomacy
                     NativeMethods.SetCursorPos(pt.X, pt.Y);
+                    // Ghim chặt chuột tại nút ngoại giao để tránh trôi chuột khi hover/click
+                    MouseLockManager.PinCursor(pt.X, pt.Y);
                     Thread.Sleep(25);
 
-                    // Perform click
+                    // Thực hiện click
                     SendMouseClick();
                     Thread.Sleep(25);
-
-                    // Return to original position
-                    NativeMethods.SetCursorPos(originalPt.X, originalPt.Y);
-                }
+                });
             }
         }
     }
@@ -367,40 +397,18 @@ public static class InputSimulator
             NativeMethods.POINT pt = new NativeMethods.POINT { X = targetX, Y = targetY };
             if (NativeMethods.ClientToScreen(hwnd, ref pt))
             {
-                if (NativeMethods.GetCursorPos(out NativeMethods.POINT originalPt))
+                MouseLockManager.ExecuteLockedAction(() =>
                 {
-                    // Instant batch input: Move -> Down + Up -> Move Back in microsecond execution (<0.05ms)
-                    int inputSize = System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT));
-                    NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[2];
-                    inputs[0] = new NativeMethods.INPUT
-                    {
-                        type = NativeMethods.INPUT_MOUSE,
-                        U = new NativeMethods.INPUT_UNION
-                        {
-                            mi = new NativeMethods.MOUSEINPUT
-                            {
-                                dwFlags = NativeMethods.MOUSEEVENTF_LEFTDOWN,
-                                dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
-                            }
-                        }
-                    };
-                    inputs[1] = new NativeMethods.INPUT
-                    {
-                        type = NativeMethods.INPUT_MOUSE,
-                        U = new NativeMethods.INPUT_UNION
-                        {
-                            mi = new NativeMethods.MOUSEINPUT
-                            {
-                                dwFlags = NativeMethods.MOUSEEVENTF_LEFTUP,
-                                dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
-                            }
-                        }
-                    };
-
+                    // Di chuyển tới ô vị trí quân tương ứng
                     NativeMethods.SetCursorPos(pt.X, pt.Y);
-                    NativeMethods.SendInput(2, inputs, inputSize);
-                    NativeMethods.SetCursorPos(originalPt.X, originalPt.Y);
-                }
+                    // Ghim chuột tại ô biểu tượng để tránh trôi chuột trong lúc click
+                    MouseLockManager.PinCursor(pt.X, pt.Y);
+                    Thread.Sleep(15);
+
+                    // Thực hiện click
+                    SendMouseClick();
+                    Thread.Sleep(15);
+                });
             }
         }
     }

@@ -29,8 +29,11 @@
 *Nếu macro chưa bật, sẽ bật macro lên*
 
 **Chức năng: Mở bảng ngoại giao**
-(F3): Click nút Diplomacy (bảng ngoại giao) 
-(F4): Mở timeline [F10 -> Mũi tên xuống * 2 -> Enter] 
+(F3): Click nút Diplomacy (bảng ngoại giao) - Khóa chuột và ghim tại nút trong thời gian xử lý, sau khi xong trả chuột và bù vào chuyển động đã mất của người dùng.
+(F4): Mở timeline [F10 -> Mũi tên xuống * 2 -> Enter] - Khóa chuột tại chỗ trong thời gian mở menu để tránh sai sót, sau khi xong trả chuột và bù vào chuyển động đã mất của người dùng. 
+
+**Chức năng: Click 5 ô biểu tượng / Xin quân lẻ**
+- (Numpad 1..5): Click vào ô biểu tượng lệnh số 1 đến 5 ở góc dưới giao diện game. Tự động khóa chuột và ghim tại ô biểu tượng trong thời gian xử lý, sau khi click xong trả chuột và bù vào chuyển động đã mất của người dùng. 
 
 **Chức năng: Remap**
 - (F12): [F3]
@@ -203,11 +206,12 @@ Ruộng F1: F
 Ruộng F2: G
 
 **Chức năng: Vẩy E**
-*Khi (ấn giữ CTRL + E): [7 -> B -> E], mỗi lần ấn E sẽ là [Click -> B -> E] cho tới khi thả CTRL, sẽ chọn lại phím đang có đạo quân trước đó*
+*Khi (ấn giữ CTRL + E nhả E nhưng vẫn giữ CTRL): [7 -> B -> E], mỗi lần click sẽ là [Click -> S -> B -> E] cho tới khi thả CTRL, sẽ chọn lại phím đang có đạo quân trước đó*
 *Lưu ý tổ chức code cho tốt*
 
 **Chức năng: Delete**
 (Click chuột middle): [CTRL + 6 -> Click chuột trái -> Delete -> 6]
+(Click giữ chuột middle): [CTRL + 6 -> Click chuột trái -> Delete -> 6] (tốc độ cao)
 
 **Chức năng: Xin quân lẻ**
 *Đây là một chức năng cực kỳ phức tạp*
