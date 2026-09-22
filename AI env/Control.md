@@ -42,33 +42,30 @@
 - (W): [H]
 - 
 **Chức năng: Xây các loại nhà nhanh**
-*Mô tả cơ chế hoạt động (Mẫu 1):*
-- Nhấn phím lần đầu tiên (1): Thực thi phím xây dựng tương ứng (Ví dụ E: [B -> E]).
-- Nhấn phím từ lần thứ 2 đến lần thứ n (2, 3, 4...): Thực thi [Chuột trái -> Phím xây dựng tương ứng] (Ví dụ E: [Chuột trái -> B -> E]) để tự động đặt móng nhà trước đó xuống và tiếp tục gọi lệnh xây nhà tiếp theo.
-- Hủy chuỗi liên tục (quay về trạng thái lần đầu):
-  + Nhấn bất kỳ phím nào khác trên bàn phím.
-  + Click bất kỳ nút nào trong 3 nút chuột (Trái, Phải, Giữa) của người dùng.
-  + Quá 20 giây kể từ lần nhấn cuối cùng.
+*Mô tả cơ chế hoạt động:*
+- Nhấn phím đơn (Tap): Thực thi phím xây dựng tương ứng (Ví dụ E: [B -> E]). Trỏ chuột hiển thị móng nhà để người chơi click chuột trái đặt móng. Khi click đặt móng xong, kết thúc trạng thái đặt nhà.
+- Nhấn giữ phím (Hold): Bắt đầu gửi [B -> Key] (Ví dụ E: [B -> E]), sau đó mỗi lần người dùng click chuột trái đặt móng, hệ thống tự động nhả chuột hộ người chơi và gửi tiếp [B -> Key] để lấy móng mới. Vòng lặp chờ click chuột -> gọi móng mới này duy trì liên tục cho tới khi người dùng nhả phím.
+- Sau khi nhả giữ phím: Hệ thống tự động ấn thêm phím [ESC] để hủy móng thừa đang lơ lửng trên con trỏ chuột.
+- Hủy chức năng xây nhanh bằng chuột phải: Nếu đang trong chế độ giữ phím xây nhanh (hoặc đang có móng), khi người dùng ấn chuột phải, macro tự động ấn [ESC] để hủy móng và thực thi [Click Chuột Phải] cho người chơi (di chuyển/tấn công sạch sẽ).
+- Chuyển đổi loại nhà: Khi đang trong trạng thái xây nhà nhanh mà đổi sang bấm phím xây nhà khác, hệ thống tự động gửi [ESC] trước để hủy móng cũ rồi mới gửi lệnh xây nhà mới.
+- Hủy móng: Khi người dùng click chuột phải, nhấn ESC hoặc chuyển cửa sổ, trạng thái xây nhà sẽ được hủy và reset về bình thường.
 
-Chi tiết các phím remapping:
-- (E): [B -> E] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> E]
-- (Q): [Chọn một đạo ruộng bất kỳ -> B -> E] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> E]
-- (R): [B -> S] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> S]
-- (T): [B -> G] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> G]
-- (V): [B -> M] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> M]
-- (F): [B -> F] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> F] *Lưu ý: Phím F nhấn đơn là xây BF (Shift + F để refresh ruộng 1)*
-- (G): [B -> F] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> F] *Lưu ý: Phím G nhấn đơn là xây BF (Shift + G để refresh ruộng 2)*
-- (B): [B -> C] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> C]
-- (N): [B -> N] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> N]
+Chi tiết các phím remapping (14 phím):
+- (E): [B -> E] (Nhà Dân BE)
+- (R): [B -> S] (Nhà Kho BS)
+- (T): [B -> G] (Nhà Chứa Ruộng BG)
+- (V): [B -> M] (Nhà Chợ BM)
+- (F): [B -> F] (Ruộng BF) *Lưu ý: Shift + F để refresh đạo ruộng 1*
+- (G): [B -> F] (Ruộng BF) *Lưu ý: Shift + G để refresh đạo ruộng 2*
+- (B): [B -> C] (Nhà Chính BC)
+- (N): [B -> N] (Nhà Chòi BN)
 
-- (A): [B -> A] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> A]
-- (S): [B -> L] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> L]
-- (Z): [B -> K] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> K]
-- (X): [B -> Y] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> Y]
-- (D): [B -> B] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> B]
-- (C): [B -> P] | Nhấn từ lần 2 đến n: [Chuột trái -> B -> P]
-
-*Khi đang xây nhà nhanh, nếu đổi sang xây nhà khác, trước tiên cần [ESC]*
+- (A): [B -> A] (Nhà Bắn Cung BA)
+- (S): [B -> L] (Nhà Ngựa Chém BL)
+- (Z): [B -> K] (Nhà Chế Pháo BK)
+- (X): [B -> Y] (Nhà Xọc Xiên BY)
+- (D): [B -> B] (Nhà Lính Chùy BB)
+- (C): [B -> P] (Nhà Phù Thủy BP)
 
 **Chức năng: Duyệt nhà binh**
 *Mô tả cơ chế hoạt động (Mẫu 2):*

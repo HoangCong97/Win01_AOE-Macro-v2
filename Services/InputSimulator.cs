@@ -296,6 +296,24 @@ public static class InputSimulator
         NativeMethods.SendInput(1, inputsUp, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
     }
 
+    public static void ReleaseLeftMouse()
+    {
+        NativeMethods.INPUT[] inputsUp = new NativeMethods.INPUT[1];
+        inputsUp[0] = new NativeMethods.INPUT
+        {
+            type = NativeMethods.INPUT_MOUSE,
+            U = new NativeMethods.INPUT_UNION
+            {
+                mi = new NativeMethods.MOUSEINPUT
+                {
+                    dwFlags = NativeMethods.MOUSEEVENTF_LEFTUP,
+                    dwExtraInfo = NativeMethods.MACRO_EXTRA_INFO
+                }
+            }
+        };
+        NativeMethods.SendInput(1, inputsUp, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
+    }
+
     public static void SendRightClick(int holdTimeMs = 25)
     {
         NativeMethods.INPUT[] inputsDown = new NativeMethods.INPUT[1];

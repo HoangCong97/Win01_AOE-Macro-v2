@@ -10,6 +10,7 @@ public class ControlEngine : IDisposable
     private readonly GameStateWatcher _gameWatcher = new();
     private readonly FarmTimerManager _farmTimerManager = new();
     private readonly VayEManager _vayEManager = new();
+    private readonly FastBuildManager _fastBuildManager = new();
     private readonly DeleteManager _deleteManager;
     private readonly System.Windows.Forms.Timer _f2LoopTimer = new();
     private readonly SemaphoreSlim _actionLock = new(1, 1);
@@ -19,9 +20,7 @@ public class ControlEngine : IDisposable
 
     private bool _isF2Pressed = false;
 
-    // Fast Building Mẫu 1 tracking state
-    private Keys _lastBuildingKey = Keys.None;
-    private DateTime _lastBuildingTime = DateTime.MinValue;
+
 
     // Quick Recruit / Military Cycle SHIFT tracking state
     private Keys _lastShiftMilitaryKey = Keys.None;
@@ -68,6 +67,7 @@ public class ControlEngine : IDisposable
         _mouseHook.RightButtonUp += OnRightButtonUp;
         _mouseHook.MiddleClickActionOccurred += OnMiddleClickAction;
         _mouseHook.LeftClickActionOccurred += OnLeftClickAction;
+        _mouseHook.RightClickActionOccurred += OnRightClickAction;
         _gameWatcher.InGameStatusChanged += OnInGameStatusChanged;
         _gameWatcher.ChatStatusChanged += OnChatStatusChanged;
 
@@ -166,12 +166,22 @@ public class ControlEngine : IDisposable
 
     private void OnMouseClick()
     {
+        if (_fastBuildManager.IsHoldingKey)
+        {
+            // Đang giữ phím xây nhà -> Cú click này là để đặt móng, không được reset chuỗi xây nhà!
+            _lastTabTime = DateTime.MinValue;
+            _lastShiftMilitaryKey = Keys.None;
+            _lastShiftMilitaryTime = DateTime.MinValue;
+            return;
+        }
+
         ResetAllChains();
     }
 
     private void OnRightButtonDown()
     {
         _isRightMouseDown = true;
+        _fastBuildManager.Reset();
         if (_isFlagModeActive)
         {
             // Trong chế độ đặt cờ, duy trì SHIFT để chuột phải cắm cờ (waypoint)
@@ -250,6 +260,36 @@ public class ControlEngine : IDisposable
             return true;
         }
 
+        // Xây nhà nhanh: Khi đang giữ phím xây dựng, mỗi click chuột trái đặt móng xong sẽ gửi tiếp [B -> Key]
+        if (_fastBuildManager.IsHoldingKey)
+        {
+            _fastBuildManager.HandleLeftClick(Log, RunActionSync);
+            return false; // Cho phép click chuột trái vật lý truyền xuống game để đặt móng
+        }
+        else if (_fastBuildManager.CurrentBuildingKey != Keys.None)
+        {
+            // Đặt xong móng nhà khi tap đơn
+            _fastBuildManager.OnLeftClickWhenNotHolding();
+        }
+
+        return false;
+    }
+
+    private bool OnRightClickAction(int msg)
+    {
+        if (_currentState != MacroState.Active || !_gameWatcher.IsInGame)
+        {
+            return false;
+        }
+
+        // Hủy chức năng xây nhanh: nếu đang trong chế độ giữ phím xây nhanh (hoặc đang có móng),
+        // khi người dùng ấn chuột phải -> macro ấn ESC và thực thi click chuột phải
+        if (_fastBuildManager.IsHoldingKey || _fastBuildManager.CurrentBuildingKey != Keys.None)
+        {
+            _fastBuildManager.HandleRightClickCancel(Log, RunActionSync);
+            return true;
+        }
+
         return false;
     }
 
@@ -294,8 +334,7 @@ public class ControlEngine : IDisposable
 
     private void ResetBuildingState()
     {
-        _lastBuildingKey = Keys.None;
-        _lastBuildingTime = DateTime.MinValue;
+        _fastBuildManager.Reset();
     }
 
     private void ResetAllChains()
@@ -662,6 +701,10 @@ public class ControlEngine : IDisposable
 
         if (!isKeyDown)
         {
+            if (_fastBuildManager.HandleKeyUp(key, Log, RunActionSync))
+            {
+                return true;
+            }
             return IsMacroKey(key, ctrlPressed, shiftPressed);
         }
 
@@ -1026,47 +1069,15 @@ public class ControlEngine : IDisposable
 
 
         // ----------------------------------------------------
-        // **Chức năng: Xây các loại nhà nhanh** (Mẫu 1)
+        // **Chức năng: Xây các loại nhà nhanh**
         // (E, R, T, V, F, G, B, N, A, S, Z, X, D, C)
         // ----------------------------------------------------
-        if (!_vayEManager.IsActive && !_isPhysicalCtrlDown && !ctrlPressed && !shiftPressed && TryGetBuildingMapping(key, out ushort firstKey, out ushort secondKey, out string buildingName))
+        if (!_vayEManager.IsActive && !_isPhysicalCtrlDown && !ctrlPressed && !shiftPressed)
         {
-            DateTime now = DateTime.Now;
-            bool isConsecutive = (key == _lastBuildingKey) && ((now - _lastBuildingTime).TotalSeconds <= 20.0);
-            bool isSwitching = (_lastBuildingKey != Keys.None) && (key != _lastBuildingKey) && ((now - _lastBuildingTime).TotalSeconds <= 20.0);
-
-            _lastBuildingKey = key;
-            _lastBuildingTime = now;
-
-            if (isConsecutive)
+            if (_fastBuildManager.HandleKeyDown(key, Log, RunActionSync))
             {
-                Log($"[Xây nhà Mẫu 1] (Liên tiếp) Click Trái -> B -> {key} ({buildingName})", Color.DarkCyan);
-                RunActionSync(() =>
-                {
-                    InputSimulator.SendMouseClick();
-                    Thread.Sleep(50); // Đợi game nhận diện móng đã đặt
-                    InputSimulator.SendKeyPress(firstKey, 15);
-                    Thread.Sleep(15);
-                    InputSimulator.SendKeyPress(secondKey, 15);
-                });
+                return true;
             }
-            else
-            {
-                Log($"[Xây nhà Mẫu 1] (Lần 1{(isSwitching ? " - Đổi nhà, gửi ESC trước" : "")}) -> B -> {key} ({buildingName})", Color.DarkCyan);
-                RunActionSync(() =>
-                {
-                    if (isSwitching)
-                    {
-                        InputSimulator.SendKeyPress((ushort)Keys.Escape, 15);
-                        Thread.Sleep(15);
-                    }
-                    InputSimulator.SendKeyPress(firstKey, 15);
-                    Thread.Sleep(15);
-                    InputSimulator.SendKeyPress(secondKey, 15);
-                });
-            }
-
-            return true;
         }
 
         // Any other non-macro key resets building and tab chain
@@ -1113,45 +1124,7 @@ public class ControlEngine : IDisposable
         }
     }
 
-    private static bool TryGetBuildingMapping(Keys key, out ushort firstKey, out ushort secondKey, out string name)
-    {
-        firstKey = (ushort)Keys.B;
 
-        switch (key)
-        {
-            case Keys.E:
-                secondKey = (ushort)Keys.E; name = "Nhà Nhà Dân BE"; return true;
-            case Keys.R:
-                secondKey = (ushort)Keys.S; name = "Nhà Kho BS"; return true;
-            case Keys.T:
-                secondKey = (ushort)Keys.G; name = "Nhà Chứa Ruộng BG"; return true;
-            case Keys.V:
-                secondKey = (ushort)Keys.M; name = "Nhà Chợ BM"; return true;
-            case Keys.F:
-            case Keys.G:
-                secondKey = (ushort)Keys.F; name = "Ruộng BF"; return true;
-            case Keys.B:
-                secondKey = (ushort)Keys.C; name = "Nhà Chính BC"; return true;
-            case Keys.N:
-                secondKey = (ushort)Keys.N; name = "Nhà Chòi BN"; return true;
-
-            case Keys.A:
-                secondKey = (ushort)Keys.A; name = "Nhà Bắn Cung BA"; return true;
-            case Keys.S:
-                secondKey = (ushort)Keys.L; name = "Nhà Ngựa Chém BL"; return true;
-            case Keys.Z:
-                secondKey = (ushort)Keys.K; name = "Nhà Chế Pháo BK"; return true;
-            case Keys.X:
-                secondKey = (ushort)Keys.Y; name = "Nhà Xọc Xiên BY"; return true;
-            case Keys.D:
-                secondKey = (ushort)Keys.B; name = "Nhà Lính Chùy BB"; return true;
-            case Keys.C:
-                secondKey = (ushort)Keys.P; name = "Nhà Phù Thủy BP"; return true;
-
-            default:
-                secondKey = 0; name = ""; return false;
-        }
-    }
 
     private bool IsMacroKey(Keys key, bool ctrlPressed, bool shiftPressed)
     {
