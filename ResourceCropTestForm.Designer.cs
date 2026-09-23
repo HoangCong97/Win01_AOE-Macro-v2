@@ -14,6 +14,8 @@ partial class ResourceCropTestForm
             _loadedOfflineBitmap?.Dispose();
             _currentTemplateCropBmp?.Dispose();
             DisposeDigitSlots();
+            DisposePopSlots();
+            _popOcrService?.Dispose();
             components?.Dispose();
         }
         base.Dispose(disposing);

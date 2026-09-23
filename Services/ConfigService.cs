@@ -24,6 +24,7 @@ public static class ConfigService
                         settings.FarmTimerInterval = 200;
                     }
                     settings.ResourceCrop ??= new ResourceCropSettings();
+                    settings.PopCrop ??= new PopCropSettings();
                     return settings;
                 }
             }

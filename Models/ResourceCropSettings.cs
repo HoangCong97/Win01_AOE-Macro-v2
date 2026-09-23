@@ -34,3 +34,25 @@ public class ResourceCropSettings
     public bool TopMost { get; set; } = true;
     public bool AutoRefresh { get; set; } = true;
 }
+
+public class PopCropSettings
+{
+    public ResourceCropBox PopBox { get; set; } = new(650, 27, 63, 13);
+    public int BrightnessThreshold { get; set; } = 175;
+    public int MaxSaturation { get; set; } = 35; // Ngưỡng chênh lệch màu max(R,G,B) - min(R,G,B) để loại bỏ nền bản đồ
+}
+
+public class PopValues
+{
+    public int? CurrentPop { get; set; }
+    public int? MaxPop { get; set; }
+
+    public bool IsValid => CurrentPop.HasValue && MaxPop.HasValue;
+
+    public override string ToString()
+    {
+        if (CurrentPop.HasValue && MaxPop.HasValue) return $"{CurrentPop}/{MaxPop}";
+        if (CurrentPop.HasValue) return $"{CurrentPop}/--";
+        return "--";
+    }
+}
