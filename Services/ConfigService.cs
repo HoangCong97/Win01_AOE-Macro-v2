@@ -23,6 +23,7 @@ public static class ConfigService
                     {
                         settings.FarmTimerInterval = 200;
                     }
+                    settings.ResourceCrop ??= new ResourceCropSettings();
                     return settings;
                 }
             }

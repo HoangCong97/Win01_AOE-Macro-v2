@@ -9,6 +9,8 @@ public partial class MainForm : Form
     private readonly ControlEngine _controlEngine = new();
     private bool _isDarkMode = false;
     private readonly List<KeyMapItem> _keyMappings = new();
+    private ResourceCropTestForm? _cropTestForm;
+    private readonly ResourceOcrService _ocrService = new();
 
     public MainForm()
     {
@@ -42,6 +44,7 @@ public partial class MainForm : Form
         _controlEngine.StateChanged += OnEngineStateChanged;
         _controlEngine.LogRequested += AppendLog;
         _controlEngine.FarmTimerUpdated += OnFarmTimerUpdated;
+        _ocrService.ResourcesUpdated += OnResourcesUpdated;
 
         ApplyTheme();
         UpdateStatusUI(_controlEngine.CurrentState);
@@ -52,11 +55,21 @@ public partial class MainForm : Form
     {
         base.OnLoad(e);
         _controlEngine.Start();
+        _ocrService.Start();
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        ConfigService.SaveSettings(new AppSettings { FarmTimerInterval = (int)numFarmInterval.Value });
+        var appSettings = ConfigService.LoadSettings();
+        appSettings.FarmTimerInterval = (int)numFarmInterval.Value;
+        ConfigService.SaveSettings(appSettings);
+
+        _ocrService.Stop();
+        _ocrService.Dispose();
+
+        _cropTestForm?.Close();
+        _cropTestForm?.Dispose();
+
         _controlEngine.Stop();
         _controlEngine.Dispose();
         base.OnFormClosing(e);
@@ -166,11 +179,31 @@ public partial class MainForm : Form
         AppendLog($"Đã chuyển sang giao diện: {(_isDarkMode ? "Tối (Dark Theme)" : "Sáng (Light Theme)")}", _isDarkMode ? Color.Cyan : Color.Blue);
     }
 
+    private void BtnCropTest_Click(object? sender, EventArgs e)
+    {
+        if (_cropTestForm == null || _cropTestForm.IsDisposed)
+        {
+            _cropTestForm = new ResourceCropTestForm();
+            _cropTestForm.Show(this);
+        }
+        else
+        {
+            if (_cropTestForm.WindowState == FormWindowState.Minimized)
+            {
+                _cropTestForm.WindowState = FormWindowState.Normal;
+            }
+            _cropTestForm.BringToFront();
+            _cropTestForm.Focus();
+        }
+    }
+
     private void NumFarmInterval_ValueChanged(object? sender, EventArgs e)
     {
         int val = (int)numFarmInterval.Value;
         _controlEngine.SetFarmTimerInterval(val);
-        ConfigService.SaveSettings(new AppSettings { FarmTimerInterval = val });
+        var s = ConfigService.LoadSettings();
+        s.FarmTimerInterval = val;
+        ConfigService.SaveSettings(s);
     }
 
     private void NumFarmInterval_Leave(object? sender, EventArgs e)
@@ -185,7 +218,9 @@ public partial class MainForm : Form
         }
         int val = (int)numFarmInterval.Value;
         _controlEngine.SetFarmTimerInterval(val);
-        ConfigService.SaveSettings(new AppSettings { FarmTimerInterval = val });
+        var s = ConfigService.LoadSettings();
+        s.FarmTimerInterval = val;
+        ConfigService.SaveSettings(s);
     }
 
     private void NumFarmInterval_KeyUp(object? sender, KeyEventArgs e)
@@ -229,6 +264,10 @@ public partial class MainForm : Form
         btnThemeToggle.ForeColor = textColor;
         btnThemeToggle.FlatAppearance.BorderColor = borderColor;
 
+        btnCropTest.BackColor = cellBg;
+        btnCropTest.ForeColor = textColor;
+        btnCropTest.FlatAppearance.BorderColor = borderColor;
+
         btnToggleMacro.BackColor = cellBg;
         btnToggleMacro.ForeColor = textColor;
         btnToggleMacro.FlatAppearance.BorderColor = borderColor;
@@ -239,6 +278,21 @@ public partial class MainForm : Form
 
         rtbLog.BackColor = logBg;
         rtbLog.ForeColor = textColor;
+
+        Color resPanelBg = _isDarkMode ? Color.FromArgb(28, 28, 34) : Color.FromArgb(245, 246, 250);
+        pnlResourceRow.BackColor = resPanelBg;
+        pnlResourceRow.BorderStyle = BorderStyle.FixedSingle;
+
+        lblResourceWood.ForeColor = _isDarkMode ? Color.FromArgb(70, 210, 130) : Color.FromArgb(46, 125, 50);
+        lblResourceFood.ForeColor = _isDarkMode ? Color.FromArgb(255, 95, 95) : Color.FromArgb(198, 40, 40);
+        lblResourceGold.ForeColor = _isDarkMode ? Color.FromArgb(255, 215, 60) : Color.FromArgb(230, 124, 115);
+        lblResourceStone.ForeColor = _isDarkMode ? Color.FromArgb(100, 210, 255) : Color.FromArgb(25, 118, 210);
+
+        Color sepColor = _isDarkMode ? Color.Gray : Color.LightGray;
+        lblResSep1.ForeColor = sepColor;
+        lblResSep2.ForeColor = sepColor;
+        lblResSep3.ForeColor = sepColor;
+        lblResourceRate.ForeColor = _isDarkMode ? Color.Gray : Color.DarkGray;
 
         foreach (Control ctrl in pnlKeyboardGrid.Controls)
         {
@@ -254,6 +308,39 @@ public partial class MainForm : Form
                 }
             }
         }
+    }
+
+    public void ReloadOcrSettings()
+    {
+        var s = ConfigService.LoadSettings().ResourceCrop ?? new ResourceCropSettings();
+        _ocrService.UpdateSettings(s);
+        _ocrService.LoadTemplates();
+    }
+
+    private void OnResourcesUpdated(ResourceValues res)
+    {
+        if (IsDisposed) return;
+
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(new Action<ResourceValues>(UpdateResourceUI), res);
+            }
+            catch { }
+        }
+        else
+        {
+            UpdateResourceUI(res);
+        }
+    }
+
+    private void UpdateResourceUI(ResourceValues res)
+    {
+        lblResourceWood.Text = $"🪵 Gỗ: {(res.Wood.HasValue ? res.Wood.Value.ToString("N0") : "--")}";
+        lblResourceFood.Text = $"🥩 Thịt: {(res.Food.HasValue ? res.Food.Value.ToString("N0") : "--")}";
+        lblResourceGold.Text = $"🪙 Vàng: {(res.Gold.HasValue ? res.Gold.Value.ToString("N0") : "--")}";
+        lblResourceStone.Text = $"🪨 Đá: {(res.Stone.HasValue ? res.Stone.Value.ToString("N0") : "--")}";
     }
 
     private void OnFarmTimerUpdated(int rem1, int rem2)

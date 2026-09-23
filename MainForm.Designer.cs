@@ -20,6 +20,7 @@ partial class MainForm
         pnlOuterBorder = new Panel();
         lblTitle = new Label();
         btnThemeToggle = new Button();
+        btnCropTest = new Button();
         pnlStatusRow = new Panel();
         btnToggleMacro = new Button();
         lblStatusTitle = new Label();
@@ -36,6 +37,15 @@ partial class MainForm
         rtbLog = new RichTextBox();
         btnClearLog = new Button();
         chkAutoScroll = new CheckBox();
+        pnlResourceRow = new Panel();
+        lblResourceWood = new Label();
+        lblResSep1 = new Label();
+        lblResourceFood = new Label();
+        lblResSep2 = new Label();
+        lblResourceGold = new Label();
+        lblResSep3 = new Label();
+        lblResourceStone = new Label();
+        lblResourceRate = new Label();
         pnlOuterBorder.SuspendLayout();
         pnlStatusRow.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)numFarmInterval).BeginInit();
@@ -46,12 +56,14 @@ partial class MainForm
         pnlOuterBorder.BackColor = Color.White;
         pnlOuterBorder.BorderStyle = BorderStyle.FixedSingle;
         pnlOuterBorder.Controls.Add(btnThemeToggle);
+        pnlOuterBorder.Controls.Add(btnCropTest);
         pnlOuterBorder.Controls.Add(rtbLog);
         pnlOuterBorder.Controls.Add(lblLogTitle);
         pnlOuterBorder.Controls.Add(btnClearLog);
         pnlOuterBorder.Controls.Add(chkAutoScroll);
         pnlOuterBorder.Controls.Add(pnlKeyboardGrid);
         pnlOuterBorder.Controls.Add(lblGridTitle);
+        pnlOuterBorder.Controls.Add(pnlResourceRow);
         pnlOuterBorder.Controls.Add(lblFarmTimer1);
         pnlOuterBorder.Controls.Add(lblFarmTimerSeparator);
         pnlOuterBorder.Controls.Add(lblFarmTimer2);
@@ -94,6 +106,22 @@ partial class MainForm
         btnThemeToggle.Text = "🌙 Giao diện tối";
         btnThemeToggle.UseVisualStyleBackColor = false;
         btnThemeToggle.Click += BtnThemeToggle_Click;
+        // 
+        // btnCropTest
+        // 
+        btnCropTest.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnCropTest.BackColor = Color.White;
+        btnCropTest.FlatAppearance.BorderColor = Color.Black;
+        btnCropTest.FlatStyle = FlatStyle.Flat;
+        btnCropTest.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 0);
+        btnCropTest.ForeColor = Color.Black;
+        btnCropTest.Location = new Point(545, 24);
+        btnCropTest.Name = "btnCropTest";
+        btnCropTest.Size = new Size(148, 30);
+        btnCropTest.TabIndex = 8;
+        btnCropTest.Text = "🔍 Crop Tài Nguyên";
+        btnCropTest.UseVisualStyleBackColor = false;
+        btnCropTest.Click += BtnCropTest_Click;
         // 
         // pnlStatusRow
         // 
@@ -210,12 +238,115 @@ partial class MainForm
         lblSecondsUnit.TabIndex = 12;
         lblSecondsUnit.Text = "giây";
         // 
+        // pnlResourceRow
+        // 
+        pnlResourceRow.BackColor = Color.FromArgb(245, 246, 250);
+        pnlResourceRow.BorderStyle = BorderStyle.FixedSingle;
+        pnlResourceRow.Controls.Add(lblResourceWood);
+        pnlResourceRow.Controls.Add(lblResSep1);
+        pnlResourceRow.Controls.Add(lblResourceFood);
+        pnlResourceRow.Controls.Add(lblResSep2);
+        pnlResourceRow.Controls.Add(lblResourceGold);
+        pnlResourceRow.Controls.Add(lblResSep3);
+        pnlResourceRow.Controls.Add(lblResourceStone);
+        pnlResourceRow.Controls.Add(lblResourceRate);
+        pnlResourceRow.Location = new Point(30, 158);
+        pnlResourceRow.Name = "pnlResourceRow";
+        pnlResourceRow.Size = new Size(764, 30);
+        pnlResourceRow.TabIndex = 13;
+        // 
+        // lblResourceWood
+        // 
+        lblResourceWood.AutoSize = true;
+        lblResourceWood.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        lblResourceWood.ForeColor = Color.FromArgb(46, 125, 50);
+        lblResourceWood.Location = new Point(10, 5);
+        lblResourceWood.Name = "lblResourceWood";
+        lblResourceWood.Size = new Size(82, 19);
+        lblResourceWood.TabIndex = 0;
+        lblResourceWood.Text = "🪵 Gỗ: --";
+        // 
+        // lblResSep1
+        // 
+        lblResSep1.AutoSize = true;
+        lblResSep1.ForeColor = Color.Gray;
+        lblResSep1.Location = new Point(165, 6);
+        lblResSep1.Name = "lblResSep1";
+        lblResSep1.Size = new Size(10, 15);
+        lblResSep1.TabIndex = 1;
+        lblResSep1.Text = "|";
+        // 
+        // lblResourceFood
+        // 
+        lblResourceFood.AutoSize = true;
+        lblResourceFood.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        lblResourceFood.ForeColor = Color.FromArgb(198, 40, 40);
+        lblResourceFood.Location = new Point(185, 5);
+        lblResourceFood.Name = "lblResourceFood";
+        lblResourceFood.Size = new Size(88, 19);
+        lblResourceFood.TabIndex = 2;
+        lblResourceFood.Text = "🥩 Thịt: --";
+        // 
+        // lblResSep2
+        // 
+        lblResSep2.AutoSize = true;
+        lblResSep2.ForeColor = Color.Gray;
+        lblResSep2.Location = new Point(340, 6);
+        lblResSep2.Name = "lblResSep2";
+        lblResSep2.Size = new Size(10, 15);
+        lblResSep2.TabIndex = 3;
+        lblResSep2.Text = "|";
+        // 
+        // lblResourceGold
+        // 
+        lblResourceGold.AutoSize = true;
+        lblResourceGold.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        lblResourceGold.ForeColor = Color.FromArgb(230, 124, 115);
+        lblResourceGold.Location = new Point(360, 5);
+        lblResourceGold.Name = "lblResourceGold";
+        lblResourceGold.Size = new Size(95, 19);
+        lblResourceGold.TabIndex = 4;
+        lblResourceGold.Text = "🪙 Vàng: --";
+        // 
+        // lblResSep3
+        // 
+        lblResSep3.AutoSize = true;
+        lblResSep3.ForeColor = Color.Gray;
+        lblResSep3.Location = new Point(515, 6);
+        lblResSep3.Name = "lblResSep3";
+        lblResSep3.Size = new Size(10, 15);
+        lblResSep3.TabIndex = 5;
+        lblResSep3.Text = "|";
+        // 
+        // lblResourceStone
+        // 
+        lblResourceStone.AutoSize = true;
+        lblResourceStone.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        lblResourceStone.ForeColor = Color.FromArgb(25, 118, 210);
+        lblResourceStone.Location = new Point(535, 5);
+        lblResourceStone.Name = "lblResourceStone";
+        lblResourceStone.Size = new Size(82, 19);
+        lblResourceStone.TabIndex = 6;
+        lblResourceStone.Text = "🪨 Đá: --";
+        // 
+        // lblResourceRate
+        // 
+        lblResourceRate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblResourceRate.AutoSize = true;
+        lblResourceRate.Font = new Font("Segoe UI", 8F);
+        lblResourceRate.ForeColor = Color.DarkGray;
+        lblResourceRate.Location = new Point(680, 8);
+        lblResourceRate.Name = "lblResourceRate";
+        lblResourceRate.Size = new Size(68, 13);
+        lblResourceRate.TabIndex = 7;
+        lblResourceRate.Text = "⚡ Quét 0.1s";
+        // 
         // lblGridTitle
         // 
         lblGridTitle.AutoSize = true;
         lblGridTitle.Font = new Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 0);
         lblGridTitle.ForeColor = Color.Black;
-        lblGridTitle.Location = new Point(30, 170);
+        lblGridTitle.Location = new Point(30, 194);
         lblGridTitle.Name = "lblGridTitle";
         lblGridTitle.Size = new Size(100, 21);
         lblGridTitle.TabIndex = 3;
@@ -233,13 +364,13 @@ partial class MainForm
         pnlKeyboardGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12.5F));
         pnlKeyboardGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12.5F));
         pnlKeyboardGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12.5F));
-        pnlKeyboardGrid.Location = new Point(30, 198);
+        pnlKeyboardGrid.Location = new Point(30, 220);
         pnlKeyboardGrid.Name = "pnlKeyboardGrid";
         pnlKeyboardGrid.RowCount = 3;
         pnlKeyboardGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
         pnlKeyboardGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
         pnlKeyboardGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
-        pnlKeyboardGrid.Size = new Size(764, 210);
+        pnlKeyboardGrid.Size = new Size(764, 192);
         pnlKeyboardGrid.TabIndex = 4;
         // 
         // lblLogTitle
@@ -318,6 +449,7 @@ partial class MainForm
     private Panel pnlOuterBorder;
     private Label lblTitle;
     private Button btnThemeToggle;
+    private Button btnCropTest;
     private Panel pnlStatusRow;
     private Button btnToggleMacro;
     private Label lblStatusTitle;
@@ -334,4 +466,13 @@ partial class MainForm
     private RichTextBox rtbLog;
     private Button btnClearLog;
     private CheckBox chkAutoScroll;
+    private Panel pnlResourceRow;
+    private Label lblResourceWood;
+    private Label lblResSep1;
+    private Label lblResourceFood;
+    private Label lblResSep2;
+    private Label lblResourceGold;
+    private Label lblResSep3;
+    private Label lblResourceStone;
+    private Label lblResourceRate;
 }

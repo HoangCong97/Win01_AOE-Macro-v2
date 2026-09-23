@@ -116,6 +116,16 @@ public static class NativeMethods
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
