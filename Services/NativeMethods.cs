@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text;
 
 namespace AOEKeyboardMacroPro.Services;
@@ -169,7 +169,14 @@ public static class NativeMethods
     // ----------------------------------------------------
     public const int WM_INPUT = 0x00FF;
     public const uint RID_INPUT = 0x10000003;
+    public const uint RIDEV_REMOVE = 0x00000001;
     public const uint RIDEV_INPUTSINK = 0x00000100;
+    public const int WM_ENTERSIZEMOVE = 0x0231;
+    public const int WM_EXITSIZEMOVE = 0x0232;
+    public const int WM_SETREDRAW = 0x000B;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
     public const ushort HID_USAGE_PAGE_GENERIC = 0x01;
     public const ushort HID_USAGE_GENERIC_MOUSE = 0x02;
     public const uint RIM_TYPEMOUSE = 0;

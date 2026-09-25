@@ -15,6 +15,12 @@ public class ResourceValues
 
     public bool IsEmpty => !Wood.HasValue && !Food.HasValue && !Gold.HasValue && !Stone.HasValue;
 
+    public bool EqualsValues(ResourceValues? other)
+    {
+        if (other is null) return false;
+        return Wood == other.Wood && Food == other.Food && Gold == other.Gold && Stone == other.Stone;
+    }
+
     public override string ToString()
     {
         return $"Gỗ: {Format(Wood)} | Thịt: {Format(Food)} | Vàng: {Format(Gold)} | Đá: {Format(Stone)}";
@@ -54,10 +60,12 @@ public class ResourceOcrService : IDisposable
     }
 
     private readonly List<DigitTemplate> _templates = new();
-    private readonly System.Windows.Forms.Timer _scanTimer = new();
+    private CancellationTokenSource? _scanCts;
+    private Task? _scanTask;
+    private int _intervalMs = 120;
     private ResourceCropSettings _cropSettings;
-    private bool _isRunning = false;
-    private bool _isScanning = false;
+    private ResourceValues? _lastRecognizedValues;
+    private volatile bool _isRunning = false;
 
     public event Action<ResourceValues>? ResourcesUpdated;
 
@@ -67,9 +75,6 @@ public class ResourceOcrService : IDisposable
     {
         _cropSettings = settings ?? ConfigService.LoadSettings().ResourceCrop ?? new ResourceCropSettings();
         LoadTemplates();
-
-        _scanTimer.Interval = 100; // 100ms (0.1 giây)
-        _scanTimer.Tick += ScanTimer_Tick;
     }
 
     public void UpdateSettings(ResourceCropSettings settings)
@@ -79,7 +84,7 @@ public class ResourceOcrService : IDisposable
 
     public void SetScanInterval(int intervalMs)
     {
-        _scanTimer.Interval = Math.Clamp(intervalMs, 20, 5000);
+        _intervalMs = Math.Clamp(intervalMs, 20, 5000);
     }
 
     public void LoadTemplates()
@@ -139,48 +144,60 @@ public class ResourceOcrService : IDisposable
     {
         if (_isRunning) return;
         _isRunning = true;
-        _scanTimer.Start();
+        _scanCts = new CancellationTokenSource();
+        _scanTask = Task.Run(() => ScanLoopAsync(_scanCts.Token));
     }
 
     public void Stop()
     {
         _isRunning = false;
-        _scanTimer.Stop();
+        _scanCts?.Cancel();
+        try { _scanTask?.Wait(300); } catch { }
+        _scanCts?.Dispose();
+        _scanCts = null;
+        _scanTask = null;
     }
 
-    private void ScanTimer_Tick(object? sender, EventArgs e)
+    private async Task ScanLoopAsync(CancellationToken ct)
     {
-        if (!_isRunning || _isScanning || _templates.Count == 0) return;
-
-        _isScanning = true;
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(_intervalMs));
         try
         {
-            var res = CaptureAndRecognize();
-            if (res != null)
+            while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct))
             {
-                ResourcesUpdated?.Invoke(res);
+                if (!_isRunning || _templates.Count == 0) continue;
+
+                try
+                {
+                    var res = CaptureAndRecognize();
+                    if (res != null && !res.IsEmpty)
+                    {
+                        if (_lastRecognizedValues == null || !res.EqualsValues(_lastRecognizedValues))
+                        {
+                            _lastRecognizedValues = res;
+                            ResourcesUpdated?.Invoke(res);
+                        }
+                    }
+                }
+                catch { }
             }
         }
-        catch { }
-        finally
-        {
-            _isScanning = false;
-        }
+        catch (OperationCanceledException) { }
     }
 
     public ResourceValues? CaptureAndRecognize()
     {
         IntPtr hwnd = FindAoeWindow();
-        int originX = 0;
-        int originY = 0;
-
-        if (hwnd != IntPtr.Zero)
+        if (hwnd == IntPtr.Zero)
         {
-            NativeMethods.POINT pt = new() { X = 0, Y = 0 };
-            NativeMethods.ClientToScreen(hwnd, ref pt);
-            originX = pt.X;
-            originY = pt.Y;
+            // Không quét màn hình Desktop khi game chưa mở, tránh nghẽn GDI / GPU
+            return null;
         }
+
+        NativeMethods.POINT pt = new() { X = 0, Y = 0 };
+        NativeMethods.ClientToScreen(hwnd, ref pt);
+        int originX = pt.X;
+        int originY = pt.Y;
 
         // Tính toán kích thước vùng chụp cần thiết
         int maxX = Math.Max(300, Math.Max(_cropSettings.Wood.X + _cropSettings.Wood.Width,
@@ -222,15 +239,37 @@ public class ResourceOcrService : IDisposable
 
         if (cropW < 4 || cropH < 4) return null;
 
+        Color[,] pixels = new Color[cropW, cropH];
+        for (int y = 0; y < cropH; y++)
+        {
+            for (int x = 0; x < cropW; x++)
+            {
+                pixels[x, y] = bmp.GetPixel(cropX + x, cropY + y);
+            }
+        }
+
+        // 1. So khớp với pixel game gốc (chữ sáng màu trên nền tối)
+        int? result = MatchDigits(pixels, cropW, cropH, invert: false);
+        if (result.HasValue) return result;
+
+        // 2. Nếu như so khớp mà không ra kết quả, đảo ngược pixel game để so sánh (đối với trường hợp số tài nguyên hiển thị màu đen)
+        return MatchDigits(pixels, cropW, cropH, invert: true);
+    }
+
+    private int? MatchDigits(Color[,] pixels, int cropW, int cropH, bool invert)
+    {
         // Binarize crop into bool array using consistent threshold 175
         bool[,] cropMatrix = new bool[cropW, cropH];
         for (int y = 0; y < cropH; y++)
         {
             for (int x = 0; x < cropW; x++)
             {
-                Color c = bmp.GetPixel(cropX + x, cropY + y);
-                int brightness = (int)(c.R * 0.299 + c.G * 0.587 + c.B * 0.114);
-                cropMatrix[x, y] = (brightness >= 175) || (c.R > 175 && c.G > 175 && c.B > 175);
+                Color c = pixels[x, y];
+                int r = invert ? (255 - c.R) : c.R;
+                int g = invert ? (255 - c.G) : c.G;
+                int b = invert ? (255 - c.B) : c.B;
+                int brightness = (int)(r * 0.299 + g * 0.587 + b * 0.114);
+                cropMatrix[x, y] = (brightness >= 175) || (r > 175 && g > 175 && b > 175);
             }
         }
 
@@ -403,7 +442,6 @@ public class ResourceOcrService : IDisposable
     public void Dispose()
     {
         Stop();
-        _scanTimer.Dispose();
         GC.SuppressFinalize(this);
     }
 }

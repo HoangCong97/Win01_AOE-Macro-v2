@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace AOEKeyboardMacroPro.Services;
 
@@ -87,6 +87,7 @@ public static class MouseLockManager
             Interlocked.Exchange(ref _accumulatedDeltaX, 0);
             Interlocked.Exchange(ref _accumulatedDeltaY, 0);
             IsLocked = true;
+            _receiver?.SetSinkEnabled(true);
 
             try
             {
@@ -100,6 +101,7 @@ public static class MouseLockManager
             finally
             {
                 UnpinCursor();
+                _receiver?.SetSinkEnabled(false);
                 IsLocked = false;
 
                 int dx = Interlocked.Exchange(ref _accumulatedDeltaX, 0);
@@ -124,6 +126,7 @@ public static class MouseLockManager
     public static void ForceUnlock()
     {
         UnpinCursor();
+        _receiver?.SetSinkEnabled(false);
         IsLocked = false;
         Interlocked.Exchange(ref _accumulatedDeltaX, 0);
         Interlocked.Exchange(ref _accumulatedDeltaY, 0);
@@ -154,16 +157,25 @@ public static class MouseLockManager
         public RawInputReceiver()
         {
             CreateHandle(new CreateParams());
+        }
 
-            var rid = new NativeMethods.RAWINPUTDEVICE
+        public void SetSinkEnabled(bool enabled)
+        {
+            if (_disposed || Handle == IntPtr.Zero) return;
+
+            try
             {
-                usUsagePage = NativeMethods.HID_USAGE_PAGE_GENERIC,
-                usUsage = NativeMethods.HID_USAGE_GENERIC_MOUSE,
-                dwFlags = NativeMethods.RIDEV_INPUTSINK,
-                hwndTarget = Handle
-            };
+                var rid = new NativeMethods.RAWINPUTDEVICE
+                {
+                    usUsagePage = NativeMethods.HID_USAGE_PAGE_GENERIC,
+                    usUsage = NativeMethods.HID_USAGE_GENERIC_MOUSE,
+                    dwFlags = enabled ? NativeMethods.RIDEV_INPUTSINK : NativeMethods.RIDEV_REMOVE,
+                    hwndTarget = enabled ? Handle : IntPtr.Zero
+                };
 
-            NativeMethods.RegisterRawInputDevices([rid], 1, (uint)Marshal.SizeOf<NativeMethods.RAWINPUTDEVICE>());
+                NativeMethods.RegisterRawInputDevices([rid], 1, (uint)Marshal.SizeOf<NativeMethods.RAWINPUTDEVICE>());
+            }
+            catch { }
         }
 
         protected override void WndProc(ref Message m)

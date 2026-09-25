@@ -9,8 +9,8 @@ public partial class MainForm : Form
     private readonly ControlEngine _controlEngine = new();
     private bool _isDarkMode = false;
     private readonly List<KeyMapItem> _keyMappings = new();
-    private ResourceCropTestForm? _cropTestForm;
     private readonly ResourceOcrService _ocrService = new();
+    private readonly PopOcrService _popOcrService = new();
 
     public MainForm()
     {
@@ -45,6 +45,7 @@ public partial class MainForm : Form
         _controlEngine.LogRequested += AppendLog;
         _controlEngine.FarmTimerUpdated += OnFarmTimerUpdated;
         _ocrService.ResourcesUpdated += OnResourcesUpdated;
+        _popOcrService.PopUpdated += OnPopUpdated;
 
         ApplyTheme();
         UpdateStatusUI(_controlEngine.CurrentState);
@@ -56,6 +57,7 @@ public partial class MainForm : Form
         base.OnLoad(e);
         _controlEngine.Start();
         _ocrService.Start();
+        _popOcrService.Start();
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -67,8 +69,8 @@ public partial class MainForm : Form
         _ocrService.Stop();
         _ocrService.Dispose();
 
-        _cropTestForm?.Close();
-        _cropTestForm?.Dispose();
+        _popOcrService.Stop();
+        _popOcrService.Dispose();
 
         _controlEngine.Stop();
         _controlEngine.Dispose();
@@ -83,6 +85,29 @@ public partial class MainForm : Form
             cp.Style |= 0x02000000; // WS_CLIPCHILDREN: Loại bỏ vùng control con khi vẽ nền, tránh repaint thừa
             return cp;
         }
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        switch (m.Msg)
+        {
+            case NativeMethods.WM_ENTERSIZEMOVE:
+                // Tắt vẽ GDI trong suốt quá trình kéo cửa sổ
+                // Windows DWM sẽ tự động di chuyển window frame bằng GPU siêu mượt, 0% CPU
+                NativeMethods.SendMessage(Handle, NativeMethods.WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero);
+                SuspendLayout();
+                break;
+
+            case NativeMethods.WM_EXITSIZEMOVE:
+                // Bật lại vẽ GDI và layout ngay khi thả chuột
+                NativeMethods.SendMessage(Handle, NativeMethods.WM_SETREDRAW, (IntPtr)1, IntPtr.Zero);
+                ResumeLayout(true);
+                Invalidate(true);
+                Update();
+                break;
+        }
+
+        base.WndProc(ref m);
     }
 
     private void InitializeKeyMappings()
@@ -179,24 +204,6 @@ public partial class MainForm : Form
         AppendLog($"Đã chuyển sang giao diện: {(_isDarkMode ? "Tối (Dark Theme)" : "Sáng (Light Theme)")}", _isDarkMode ? Color.Cyan : Color.Blue);
     }
 
-    private void BtnCropTest_Click(object? sender, EventArgs e)
-    {
-        if (_cropTestForm == null || _cropTestForm.IsDisposed)
-        {
-            _cropTestForm = new ResourceCropTestForm();
-            _cropTestForm.Show(this);
-        }
-        else
-        {
-            if (_cropTestForm.WindowState == FormWindowState.Minimized)
-            {
-                _cropTestForm.WindowState = FormWindowState.Normal;
-            }
-            _cropTestForm.BringToFront();
-            _cropTestForm.Focus();
-        }
-    }
-
     private void NumFarmInterval_ValueChanged(object? sender, EventArgs e)
     {
         int val = (int)numFarmInterval.Value;
@@ -264,10 +271,6 @@ public partial class MainForm : Form
         btnThemeToggle.ForeColor = textColor;
         btnThemeToggle.FlatAppearance.BorderColor = borderColor;
 
-        btnCropTest.BackColor = cellBg;
-        btnCropTest.ForeColor = textColor;
-        btnCropTest.FlatAppearance.BorderColor = borderColor;
-
         btnToggleMacro.BackColor = cellBg;
         btnToggleMacro.ForeColor = textColor;
         btnToggleMacro.FlatAppearance.BorderColor = borderColor;
@@ -292,6 +295,8 @@ public partial class MainForm : Form
         lblResSep1.ForeColor = sepColor;
         lblResSep2.ForeColor = sepColor;
         lblResSep3.ForeColor = sepColor;
+        lblResSep4.ForeColor = sepColor;
+        lblResourcePop.ForeColor = _isDarkMode ? Color.FromArgb(235, 130, 255) : Color.FromArgb(142, 36, 170);
         lblResourceRate.ForeColor = _isDarkMode ? Color.Gray : Color.DarkGray;
 
         foreach (Control ctrl in pnlKeyboardGrid.Controls)
@@ -315,6 +320,10 @@ public partial class MainForm : Form
         var s = ConfigService.LoadSettings().ResourceCrop ?? new ResourceCropSettings();
         _ocrService.UpdateSettings(s);
         _ocrService.LoadTemplates();
+
+        var popSettings = ConfigService.LoadSettings().PopCrop ?? new PopCropSettings();
+        _popOcrService.UpdateSettings(popSettings);
+        _popOcrService.LoadTemplates();
     }
 
     private void OnResourcesUpdated(ResourceValues res)
@@ -341,6 +350,29 @@ public partial class MainForm : Form
         lblResourceFood.Text = $"🥩 Thịt: {(res.Food.HasValue ? res.Food.Value.ToString("N0") : "--")}";
         lblResourceGold.Text = $"🪙 Vàng: {(res.Gold.HasValue ? res.Gold.Value.ToString("N0") : "--")}";
         lblResourceStone.Text = $"🪨 Đá: {(res.Stone.HasValue ? res.Stone.Value.ToString("N0") : "--")}";
+    }
+
+    private void OnPopUpdated(PopValues pop)
+    {
+        if (IsDisposed) return;
+
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(new Action<PopValues>(UpdatePopUI), pop);
+            }
+            catch { }
+        }
+        else
+        {
+            UpdatePopUI(pop);
+        }
+    }
+
+    private void UpdatePopUI(PopValues pop)
+    {
+        lblResourcePop.Text = $"👥 POP: {(pop.IsValid ? $"{pop.CurrentPop}/{pop.MaxPop}" : (pop.CurrentPop.HasValue ? $"{pop.CurrentPop}/--" : "--/--"))}";
     }
 
     private void OnFarmTimerUpdated(int rem1, int rem2)

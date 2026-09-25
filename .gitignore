@@ -17,3 +17,6 @@
 
 ## Standalone build outputs
 *.exe
+
+## Backup files
+*.bak

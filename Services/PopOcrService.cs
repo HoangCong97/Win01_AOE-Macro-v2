@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Text;
+using System.Text.Json;
 using AOEKeyboardMacroPro.Models;
 
 namespace AOEKeyboardMacroPro.Services;
@@ -11,18 +12,32 @@ public class GlyphTemplate
     public char Character { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
-    public bool[,] Matrix { get; set; } = null!;
-    public int WhitePixelCount { get; set; }
-    public int BlackPixelCount { get; set; }
+    public List<Point> WhitePixels { get; set; } = new();
+    public int TotalWhite => WhitePixels.Count;
+}
+
+public class PopCandidateMatch
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public char Character { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int MatchedWhite { get; set; }
+    public int TotalWhite { get; set; }
+    public int ExtraWhite { get; set; }
+    public double Score { get; set; }
 }
 
 public class PopOcrService : IDisposable
 {
     private readonly List<GlyphTemplate> _templates = new();
-    private readonly System.Windows.Forms.Timer _scanTimer = new();
+    private CancellationTokenSource? _scanCts;
+    private Task? _scanTask;
+    private int _intervalMs = 120;
     private PopCropSettings _cropSettings;
-    private bool _isRunning = false;
-    private bool _isScanning = false;
+    private PopValues? _lastRecognizedValues;
+    private volatile bool _isRunning = false;
 
     public event Action<PopValues>? PopUpdated;
 
@@ -32,9 +47,6 @@ public class PopOcrService : IDisposable
     {
         _cropSettings = settings ?? ConfigService.LoadSettings().PopCrop ?? new PopCropSettings();
         LoadTemplates();
-
-        _scanTimer.Interval = 100; // 100ms
-        _scanTimer.Tick += ScanTimer_Tick;
     }
 
     public void UpdateSettings(PopCropSettings settings)
@@ -44,14 +56,19 @@ public class PopOcrService : IDisposable
 
     public void SetScanInterval(int intervalMs)
     {
-        _scanTimer.Interval = Math.Clamp(intervalMs, 20, 5000);
+        _intervalMs = Math.Clamp(intervalMs, 20, 5000);
     }
 
     public void LoadTemplates()
     {
         _templates.Clear();
+
         string[] searchDirs = new[]
         {
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Templates", "PopAoe", "crops"),
+            Path.Combine(Directory.GetCurrentDirectory(), "Templates", "PopAoe", "crops"),
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Templates", "PopAoe"),
+            Path.Combine(Directory.GetCurrentDirectory(), "Templates", "PopAoe"),
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Templates", "Pop"),
             Path.Combine(Directory.GetCurrentDirectory(), "Templates", "Pop")
         };
@@ -59,18 +76,71 @@ public class PopOcrService : IDisposable
         string? validDir = searchDirs.FirstOrDefault(Directory.Exists);
         if (validDir == null) return;
 
-        // Load 10 digits: 0..9
-        for (int d = 0; d <= 9; d++)
+        // Cố gắng đọc tọa độ mặc định từ data.json nếu có
+        string dataJsonPath = Path.Combine(Path.GetDirectoryName(validDir) ?? "", "data.json");
+        if (!File.Exists(dataJsonPath))
         {
-            string path = Path.Combine(validDir, $"{d}.png");
-            LoadSingleTemplate(path, (char)('0' + d));
+            dataJsonPath = Path.Combine(validDir, "data.json");
+        }
+        if (File.Exists(dataJsonPath))
+        {
+            try
+            {
+                string jsonText = File.ReadAllText(dataJsonPath);
+                using var doc = JsonDocument.Parse(jsonText);
+                if (doc.RootElement.TryGetProperty("areas", out var areasElem) && areasElem.GetArrayLength() > 0)
+                {
+                    var firstArea = areasElem[0];
+                    if (firstArea.TryGetProperty("x", out var xProp) &&
+                        firstArea.TryGetProperty("y", out var yProp) &&
+                        firstArea.TryGetProperty("width", out var wProp) &&
+                        firstArea.TryGetProperty("height", out var hProp))
+                    {
+                        // Chỉ cập nhật nếu cài đặt hiện tại chưa tùy biến
+                        if (_cropSettings.PopBox.X == 650 && _cropSettings.PopBox.Y == 27)
+                        {
+                            _cropSettings.PopBox = new ResourceCropBox(xProp.GetInt32(), yProp.GetInt32(), wProp.GetInt32(), hProp.GetInt32());
+                        }
+                    }
+                }
+            }
+            catch { }
         }
 
-        // Load slash '/' (slash.png or 10.png or div.png)
-        string slashPath = Path.Combine(validDir, "slash.png");
-        if (!File.Exists(slashPath)) slashPath = Path.Combine(validDir, "10.png");
-        if (!File.Exists(slashPath)) slashPath = Path.Combine(validDir, "div.png");
-        LoadSingleTemplate(slashPath, '/');
+        // Tải các file template PNG trong thư mục
+        var files = Directory.GetFiles(validDir, "*.png");
+        foreach (var file in files)
+        {
+            string fname = Path.GetFileName(file);
+            char c = ' ';
+
+            if (fname.Contains("Slash", StringComparison.OrdinalIgnoreCase) || fname.Contains("div", StringComparison.OrdinalIgnoreCase))
+            {
+                c = '/';
+            }
+            else
+            {
+                var parts = fname.Split('_');
+                if (parts.Length >= 3)
+                {
+                    string charStr = Path.GetFileNameWithoutExtension(parts[2]);
+                    if (charStr.Length > 0) c = charStr[0];
+                }
+                else
+                {
+                    string withoutExt = Path.GetFileNameWithoutExtension(fname);
+                    if (withoutExt.Length == 1 && char.IsDigit(withoutExt[0]))
+                    {
+                        c = withoutExt[0];
+                    }
+                }
+            }
+
+            if (c != ' ')
+            {
+                LoadSingleTemplate(file, c);
+            }
+        }
     }
 
     private void LoadSingleTemplate(string path, char character)
@@ -83,28 +153,29 @@ public class PopOcrService : IDisposable
 
             int w = bmp.Width;
             int h = bmp.Height;
-            bool[,] matrix = new bool[w, h];
-            int whiteCount = 0;
+            List<Point> whitePts = new();
 
             for (int y = 0; y < h; y++)
             {
                 for (int x = 0; x < w; x++)
                 {
                     Color c = bmp.GetPixel(x, y);
-                    bool isWhite = (c.R > 150 && c.G > 150 && c.B > 150) || (c.R > 180);
-                    matrix[x, y] = isWhite;
-                    if (isWhite) whiteCount++;
+                    // Mẫu thuần nhị phân: điểm trắng (255, 255, 255)
+                    if (c.R == 255 && c.G == 255 && c.B == 255)
+                    {
+                        whitePts.Add(new Point(x, y));
+                    }
                 }
             }
 
+            // Tránh nạp trùng nếu đã nạp ký tự này
+            _templates.RemoveAll(t => t.Character == character);
             _templates.Add(new GlyphTemplate
             {
                 Character = character,
                 Width = w,
                 Height = h,
-                Matrix = matrix,
-                WhitePixelCount = whiteCount,
-                BlackPixelCount = w * h - whiteCount
+                WhitePixels = whitePts
             });
         }
         catch { }
@@ -114,200 +185,206 @@ public class PopOcrService : IDisposable
     {
         if (_isRunning) return;
         _isRunning = true;
-        _scanTimer.Start();
+        _scanCts = new CancellationTokenSource();
+        _scanTask = Task.Run(() => ScanLoopAsync(_scanCts.Token));
     }
 
     public void Stop()
     {
         _isRunning = false;
-        _scanTimer.Stop();
+        _scanCts?.Cancel();
+        try { _scanTask?.Wait(300); } catch { }
+        _scanCts?.Dispose();
+        _scanCts = null;
+        _scanTask = null;
     }
 
-    private void ScanTimer_Tick(object? sender, EventArgs e)
+    private async Task ScanLoopAsync(CancellationToken ct)
     {
-        if (!_isRunning || _isScanning || _templates.Count == 0) return;
-
-        _isScanning = true;
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(_intervalMs));
         try
         {
-            var res = CaptureAndRecognize();
-            if (res != null)
+            while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct))
             {
-                PopUpdated?.Invoke(res);
+                if (!_isRunning || _templates.Count == 0) continue;
+
+                try
+                {
+                    var res = CaptureAndRecognize();
+                    if (res != null && res.IsValid)
+                    {
+                        if (_lastRecognizedValues == null || !res.EqualsValues(_lastRecognizedValues))
+                        {
+                            _lastRecognizedValues = res;
+                            PopUpdated?.Invoke(res);
+                        }
+                    }
+                }
+                catch { }
             }
         }
-        catch { }
-        finally
-        {
-            _isScanning = false;
-        }
+        catch (OperationCanceledException) { }
     }
 
     public PopValues? CaptureAndRecognize()
     {
         IntPtr hwnd = FindAoeWindow();
-        int originX = 0;
-        int originY = 0;
-
-        if (hwnd != IntPtr.Zero)
+        if (hwnd == IntPtr.Zero)
         {
-            NativeMethods.POINT pt = new() { X = 0, Y = 0 };
-            NativeMethods.ClientToScreen(hwnd, ref pt);
-            originX = pt.X;
-            originY = pt.Y;
+            return null;
         }
 
-        int maxX = Math.Max(750, _cropSettings.PopBox.X + _cropSettings.PopBox.Width + 20);
-        int maxY = Math.Max(60, _cropSettings.PopBox.Y + _cropSettings.PopBox.Height + 10);
+        NativeMethods.POINT pt = new() { X = 0, Y = 0 };
+        NativeMethods.ClientToScreen(hwnd, ref pt);
+        int originX = pt.X;
+        int originY = pt.Y;
 
-        using Bitmap capture = new(maxX, maxY, PixelFormat.Format32bppArgb);
+        int boxX = _cropSettings.PopBox.X;
+        int boxY = _cropSettings.PopBox.Y;
+        int boxW = _cropSettings.PopBox.Width;
+        int boxH = _cropSettings.PopBox.Height;
+
+        int screenCropX = originX + boxX;
+        int screenCropY = originY + boxY;
+
+        using Bitmap capture = new(boxW, boxH, PixelFormat.Format32bppArgb);
         using (Graphics g = Graphics.FromImage(capture))
         {
-            g.CopyFromScreen(originX, originY, 0, 0, new Size(maxX, maxY));
+            g.CopyFromScreen(screenCropX, screenCropY, 0, 0, new Size(boxW, boxH));
         }
 
-        return RecognizeFromBitmap(capture, _cropSettings);
+        return RecognizeFromBitmap(capture, 0, 0, boxW, boxH);
     }
 
-    public PopValues RecognizeFromBitmap(Bitmap bmp, PopCropSettings settings)
-    {
-        return RecognizeCrop(bmp, settings.PopBox, settings.BrightnessThreshold, settings.MaxSaturation);
-    }
-
-    public PopValues RecognizeCrop(Bitmap bmp, ResourceCropBox box, int brightnessThreshold = 175, int maxSaturation = 35)
+    /// <summary>
+    /// Nhận diện POP từ Bitmap nguồn với nguyên tắc:
+    /// Đưa hình ảnh về dạng đen trắng (Threshold = 255), sau đó chỉ so khớp điểm ảnh trắng.
+    /// </summary>
+    public PopValues RecognizeFromBitmap(Bitmap bmp, int cropX, int cropY, int cropW, int cropH)
     {
         if (_templates.Count == 0) return new PopValues();
 
-        int cropX = Math.Clamp(box.X, 0, Math.Max(0, bmp.Width - 1));
-        int cropY = Math.Clamp(box.Y, 0, Math.Max(0, bmp.Height - 1));
-        int cropW = Math.Clamp(box.Width, 1, Math.Max(1, bmp.Width - cropX));
-        int cropH = Math.Clamp(box.Height, 1, Math.Max(1, bmp.Height - cropY));
+        cropX = Math.Clamp(cropX, 0, Math.Max(0, bmp.Width - 1));
+        cropY = Math.Clamp(cropY, 0, Math.Max(0, bmp.Height - 1));
+        cropW = Math.Clamp(cropW, 1, Math.Max(1, bmp.Width - cropX));
+        cropH = Math.Clamp(cropH, 1, Math.Max(1, bmp.Height - cropY));
 
         if (cropW < 4 || cropH < 4) return new PopValues();
 
-        // Nhị phân hóa với bộ lọc sắc độ / bão hòa màu chống nhiễu địa hình bản đồ (cỏ, nước, cát)
-        bool[,] cropMatrix = BinarizeWithMapFilter(bmp, cropX, cropY, cropW, cropH, brightnessThreshold, maxSaturation);
+        // 1. Nhị phân hóa với ngưỡng threshold = 255 (chỉ màu trắng tinh RGB 255,255,255)
+        bool[,] bin = BinarizeThreshold255(bmp, cropX, cropY, cropW, cropH);
 
-        StringBuilder text = new();
-        int curX = 0;
+        // 2. Tìm tất cả các vị trí ứng viên có 100% điểm ảnh trắng khớp với template
+        List<PopCandidateMatch> candidates = new();
 
-        while (curX <= cropW - 3)
+        for (int x = 0; x <= cropW - 4; x++)
         {
-            // Kiểm tra cột curX có pixel trắng nào không
-            bool colHasWhite = false;
-            for (int y = 0; y < cropH; y++)
+            for (int y = 0; y <= cropH - 10; y++)
             {
-                if (cropMatrix[curX, y])
+                foreach (var t in _templates)
                 {
-                    colHasWhite = true;
+                    if (x + t.Width > cropW || y + t.Height > cropH) continue;
+
+                    int matchedWhite = 0;
+                    foreach (var pt in t.WhitePixels)
+                    {
+                        if (bin[x + pt.X, y + pt.Y]) matchedWhite++;
+                    }
+
+                    // Chỉ so khớp điểm ảnh trắng (100% điểm trắng của mẫu phải có trên ảnh)
+                    if (matchedWhite == t.TotalWhite)
+                    {
+                        // Đếm số điểm ảnh trắng thực tế trong vùng khung chữ nhật
+                        int imgWhite = 0;
+                        for (int ty = 0; ty < t.Height; ty++)
+                        {
+                            for (int tx = 0; tx < t.Width; tx++)
+                            {
+                                if (bin[x + tx, y + ty]) imgWhite++;
+                            }
+                        }
+
+                        int extraWhite = imgWhite - matchedWhite;
+                        // Điểm số: thưởng điểm khớp trắng, trừ điểm pixel trắng thừa trong bounding box
+                        double score = matchedWhite * 10 - extraWhite * 15;
+
+                        candidates.Add(new PopCandidateMatch
+                        {
+                            X = x,
+                            Y = y,
+                            Character = t.Character,
+                            Width = t.Width,
+                            Height = t.Height,
+                            MatchedWhite = matchedWhite,
+                            TotalWhite = t.TotalWhite,
+                            ExtraWhite = extraWhite,
+                            Score = score
+                        });
+                    }
+                }
+            }
+        }
+
+        if (candidates.Count == 0) return new PopValues();
+
+        // 3. Chọn tham lam các ký tự không đè nhau theo thứ tự điểm số cao nhất
+        candidates.Sort((a, b) => b.Score.CompareTo(a.Score));
+        List<PopCandidateMatch> chosen = new();
+
+        foreach (var c in candidates)
+        {
+            bool overlap = false;
+            foreach (var existing in chosen)
+            {
+                // Kiểm tra xung đột ngang (Horizontal overlap)
+                if (!(c.X + c.Width <= existing.X || c.X >= existing.X + existing.Width))
+                {
+                    overlap = true;
                     break;
                 }
             }
 
-            if (!colHasWhite)
+            if (!overlap)
             {
-                curX++;
-                continue;
-            }
-
-            // So khớp với tất cả 11 templates qua các độ lệch dọc dY
-            GlyphTemplate? bestMatch = null;
-            int bestScore = -999999;
-
-            foreach (var t in _templates)
-            {
-                if (curX + t.Width > cropW) continue;
-
-                int maxDy = Math.Max(0, cropH - t.Height);
-                for (int dy = 0; dy <= maxDy; dy++)
-                {
-                    int matchWhite = 0;
-                    int missingWhite = 0;
-                    int extraWhite = 0;
-                    int evalH = Math.Min(t.Height, cropH - dy);
-
-                    for (int ty = 0; ty < evalH; ty++)
-                    {
-                        for (int tx = 0; tx < t.Width; tx++)
-                        {
-                            bool tVal = t.Matrix[tx, ty];
-                            bool cVal = cropMatrix[curX + tx, dy + ty];
-
-                            if (tVal)
-                            {
-                                if (cVal) matchWhite++;
-                                else missingWhite++;
-                            }
-                            else
-                            {
-                                if (cVal) extraWhite++;
-                            }
-                        }
-                    }
-
-                    if (t.WhitePixelCount > 0)
-                    {
-                        double whiteRatio = (double)matchWhite / t.WhitePixelCount;
-                        double extraRatio = (double)extraWhite / Math.Max(1, t.BlackPixelCount);
-
-                        // Tiêu chuẩn khớp tin cậy cho POP:
-                        // Trùng >= 78% pixel trắng của mẫu, và pixel lạ vào vùng đen <= 20%
-                        if (whiteRatio >= 0.78 && extraRatio <= 0.20)
-                        {
-                            int score = matchWhite * 3 - missingWhite * 4 - extraWhite * 2;
-                            if (score > bestScore)
-                            {
-                                bestScore = score;
-                                bestMatch = t;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (bestMatch != null)
-            {
-                text.Append(bestMatch.Character);
-                curX += bestMatch.Width; // Nhảy qua bề ngang ký tự vừa khớp
-            }
-            else
-            {
-                curX++;
+                chosen.Add(c);
             }
         }
 
-        return ParsePopString(text.ToString());
+        // 4. Sắp xếp các ký tự đã chọn từ trái sang phải
+        chosen.Sort((a, b) => a.X.CompareTo(b.X));
+
+        StringBuilder sb = new();
+        foreach (var item in chosen)
+        {
+            sb.Append(item.Character);
+        }
+
+        return ParsePopString(sb.ToString());
     }
 
-    public static bool[,] BinarizeWithMapFilter(Bitmap bmp, int cropX, int cropY, int cropW, int cropH, int brightnessThreshold = 175, int maxSaturation = 35)
+    public static bool[,] BinarizeThreshold255(Bitmap bmp, int cropX, int cropY, int cropW, int cropH)
     {
-        bool[,] matrix = new bool[cropW, cropH];
+        bool[,] bin = new bool[cropW, cropH];
         for (int y = 0; y < cropH; y++)
         {
             for (int x = 0; x < cropW; x++)
             {
-                Color c = bmp.GetPixel(cropX + x, cropY + y);
-                int brightness = (int)(c.R * 0.299 + c.G * 0.587 + c.B * 0.114);
-                int maxChannel = Math.Max(c.R, Math.Max(c.G, c.B));
-                int minChannel = Math.Min(c.R, Math.Min(c.G, c.B));
-                int diff = maxChannel - minChannel;
-
-                // Chỉ giữ pixel nếu vừa sáng vừa KHÔNG có màu mạnh (loại bỏ màu xanh cỏ, xanh nước, vàng đất)
-                matrix[x, y] = (brightness >= brightnessThreshold) && (diff <= maxSaturation);
+                Color px = bmp.GetPixel(cropX + x, cropY + y);
+                bin[x, y] = (px.R == 255 && px.G == 255 && px.B == 255);
             }
         }
-        return matrix;
+        return bin;
     }
 
-    public static Bitmap CreateFilteredPreviewBitmap(Bitmap bmp, int cropX, int cropY, int cropW, int cropH, int brightnessThreshold = 175, int maxSaturation = 35)
+    public static Bitmap CreateBinarizedBitmap(Bitmap bmp, int cropX, int cropY, int cropW, int cropH)
     {
-        bool[,] matrix = BinarizeWithMapFilter(bmp, cropX, cropY, cropW, cropH, brightnessThreshold, maxSaturation);
+        bool[,] bin = BinarizeThreshold255(bmp, cropX, cropY, cropW, cropH);
         Bitmap dest = new(cropW, cropH);
         for (int y = 0; y < cropH; y++)
         {
             for (int x = 0; x < cropW; x++)
             {
-                dest.SetPixel(x, y, matrix[x, y] ? Color.White : Color.Black);
+                dest.SetPixel(x, y, bin[x, y] ? Color.White : Color.Black);
             }
         }
         return dest;
@@ -319,17 +396,26 @@ public class PopOcrService : IDisposable
         if (string.IsNullOrWhiteSpace(raw)) return res;
 
         int slashIdx = raw.IndexOf('/');
-        if (slashIdx >= 0)
+        if (slashIdx > 0)
         {
-            string part1 = raw.Substring(0, slashIdx).Trim();
-            string part2 = raw.Substring(slashIdx + 1).Trim();
+            string curStr = raw[..slashIdx].Trim();
+            string maxStr = raw[(slashIdx + 1)..].Trim();
 
-            if (int.TryParse(part1, out int c)) res.CurrentPop = c;
-            if (int.TryParse(part2, out int m)) res.MaxPop = m;
+            if (int.TryParse(curStr, out int curVal))
+            {
+                res.CurrentPop = curVal;
+            }
+            if (int.TryParse(maxStr, out int maxVal))
+            {
+                res.MaxPop = maxVal;
+            }
         }
         else
         {
-            if (int.TryParse(raw.Trim(), out int c)) res.CurrentPop = c;
+            if (int.TryParse(raw.Trim(), out int curVal))
+            {
+                res.CurrentPop = curVal;
+            }
         }
 
         return res;
@@ -337,32 +423,6 @@ public class PopOcrService : IDisposable
 
     private static IntPtr FindAoeWindow()
     {
-        IntPtr fgHwnd = NativeMethods.GetForegroundWindow();
-        if (fgHwnd != IntPtr.Zero && IsAoeWindow(fgHwnd))
-        {
-            return fgHwnd;
-        }
-
-        try
-        {
-            foreach (var proc in Process.GetProcesses())
-            {
-                try
-                {
-                    string name = proc.ProcessName.ToLowerInvariant();
-                    if (name.Contains("empires") || name.Contains("aoe") || name.Contains("age"))
-                    {
-                        if (proc.MainWindowHandle != IntPtr.Zero)
-                        {
-                            return proc.MainWindowHandle;
-                        }
-                    }
-                }
-                catch { }
-            }
-        }
-        catch { }
-
         IntPtr found = IntPtr.Zero;
         try
         {
@@ -387,13 +447,6 @@ public class PopOcrService : IDisposable
         return found;
     }
 
-    private static bool IsAoeWindow(IntPtr hwnd)
-    {
-        StringBuilder sb = new(256);
-        NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-        return IsAoeTitle(sb.ToString());
-    }
-
     private static bool IsAoeTitle(string title)
     {
         if (string.IsNullOrWhiteSpace(title)) return false;
@@ -407,7 +460,6 @@ public class PopOcrService : IDisposable
     public void Dispose()
     {
         Stop();
-        _scanTimer.Dispose();
         GC.SuppressFinalize(this);
     }
 }

@@ -20,7 +20,6 @@ partial class MainForm
         pnlOuterBorder = new Panel();
         lblTitle = new Label();
         btnThemeToggle = new Button();
-        btnCropTest = new Button();
         pnlStatusRow = new Panel();
         btnToggleMacro = new Button();
         lblStatusTitle = new Label();
@@ -45,6 +44,8 @@ partial class MainForm
         lblResourceGold = new Label();
         lblResSep3 = new Label();
         lblResourceStone = new Label();
+        lblResSep4 = new Label();
+        lblResourcePop = new Label();
         lblResourceRate = new Label();
         pnlOuterBorder.SuspendLayout();
         pnlStatusRow.SuspendLayout();
@@ -56,7 +57,6 @@ partial class MainForm
         pnlOuterBorder.BackColor = Color.White;
         pnlOuterBorder.BorderStyle = BorderStyle.FixedSingle;
         pnlOuterBorder.Controls.Add(btnThemeToggle);
-        pnlOuterBorder.Controls.Add(btnCropTest);
         pnlOuterBorder.Controls.Add(rtbLog);
         pnlOuterBorder.Controls.Add(lblLogTitle);
         pnlOuterBorder.Controls.Add(btnClearLog);
@@ -106,22 +106,6 @@ partial class MainForm
         btnThemeToggle.Text = "🌙 Giao diện tối";
         btnThemeToggle.UseVisualStyleBackColor = false;
         btnThemeToggle.Click += BtnThemeToggle_Click;
-        // 
-        // btnCropTest
-        // 
-        btnCropTest.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnCropTest.BackColor = Color.White;
-        btnCropTest.FlatAppearance.BorderColor = Color.Black;
-        btnCropTest.FlatStyle = FlatStyle.Flat;
-        btnCropTest.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 0);
-        btnCropTest.ForeColor = Color.Black;
-        btnCropTest.Location = new Point(545, 24);
-        btnCropTest.Name = "btnCropTest";
-        btnCropTest.Size = new Size(148, 30);
-        btnCropTest.TabIndex = 8;
-        btnCropTest.Text = "🔍 Crop Tài Nguyên";
-        btnCropTest.UseVisualStyleBackColor = false;
-        btnCropTest.Click += BtnCropTest_Click;
         // 
         // pnlStatusRow
         // 
@@ -249,6 +233,8 @@ partial class MainForm
         pnlResourceRow.Controls.Add(lblResourceGold);
         pnlResourceRow.Controls.Add(lblResSep3);
         pnlResourceRow.Controls.Add(lblResourceStone);
+        pnlResourceRow.Controls.Add(lblResSep4);
+        pnlResourceRow.Controls.Add(lblResourcePop);
         pnlResourceRow.Controls.Add(lblResourceRate);
         pnlResourceRow.Location = new Point(30, 158);
         pnlResourceRow.Name = "pnlResourceRow";
@@ -270,7 +256,7 @@ partial class MainForm
         // 
         lblResSep1.AutoSize = true;
         lblResSep1.ForeColor = Color.Gray;
-        lblResSep1.Location = new Point(165, 6);
+        lblResSep1.Location = new Point(120, 6);
         lblResSep1.Name = "lblResSep1";
         lblResSep1.Size = new Size(10, 15);
         lblResSep1.TabIndex = 1;
@@ -281,7 +267,7 @@ partial class MainForm
         lblResourceFood.AutoSize = true;
         lblResourceFood.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
         lblResourceFood.ForeColor = Color.FromArgb(198, 40, 40);
-        lblResourceFood.Location = new Point(185, 5);
+        lblResourceFood.Location = new Point(135, 5);
         lblResourceFood.Name = "lblResourceFood";
         lblResourceFood.Size = new Size(88, 19);
         lblResourceFood.TabIndex = 2;
@@ -291,7 +277,7 @@ partial class MainForm
         // 
         lblResSep2.AutoSize = true;
         lblResSep2.ForeColor = Color.Gray;
-        lblResSep2.Location = new Point(340, 6);
+        lblResSep2.Location = new Point(250, 6);
         lblResSep2.Name = "lblResSep2";
         lblResSep2.Size = new Size(10, 15);
         lblResSep2.TabIndex = 3;
@@ -302,7 +288,7 @@ partial class MainForm
         lblResourceGold.AutoSize = true;
         lblResourceGold.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
         lblResourceGold.ForeColor = Color.FromArgb(230, 124, 115);
-        lblResourceGold.Location = new Point(360, 5);
+        lblResourceGold.Location = new Point(265, 5);
         lblResourceGold.Name = "lblResourceGold";
         lblResourceGold.Size = new Size(95, 19);
         lblResourceGold.TabIndex = 4;
@@ -312,7 +298,7 @@ partial class MainForm
         // 
         lblResSep3.AutoSize = true;
         lblResSep3.ForeColor = Color.Gray;
-        lblResSep3.Location = new Point(515, 6);
+        lblResSep3.Location = new Point(385, 6);
         lblResSep3.Name = "lblResSep3";
         lblResSep3.Size = new Size(10, 15);
         lblResSep3.TabIndex = 5;
@@ -323,11 +309,32 @@ partial class MainForm
         lblResourceStone.AutoSize = true;
         lblResourceStone.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
         lblResourceStone.ForeColor = Color.FromArgb(25, 118, 210);
-        lblResourceStone.Location = new Point(535, 5);
+        lblResourceStone.Location = new Point(400, 5);
         lblResourceStone.Name = "lblResourceStone";
         lblResourceStone.Size = new Size(82, 19);
         lblResourceStone.TabIndex = 6;
         lblResourceStone.Text = "🪨 Đá: --";
+        // 
+        // lblResSep4
+        // 
+        lblResSep4.AutoSize = true;
+        lblResSep4.ForeColor = Color.Gray;
+        lblResSep4.Location = new Point(515, 6);
+        lblResSep4.Name = "lblResSep4";
+        lblResSep4.Size = new Size(10, 15);
+        lblResSep4.TabIndex = 7;
+        lblResSep4.Text = "|";
+        // 
+        // lblResourcePop
+        // 
+        lblResourcePop.AutoSize = true;
+        lblResourcePop.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        lblResourcePop.ForeColor = Color.FromArgb(142, 36, 170);
+        lblResourcePop.Location = new Point(530, 5);
+        lblResourcePop.Name = "lblResourcePop";
+        lblResourcePop.Size = new Size(105, 19);
+        lblResourcePop.TabIndex = 8;
+        lblResourcePop.Text = "👥 POP: --/--";
         // 
         // lblResourceRate
         // 
@@ -338,7 +345,7 @@ partial class MainForm
         lblResourceRate.Location = new Point(680, 8);
         lblResourceRate.Name = "lblResourceRate";
         lblResourceRate.Size = new Size(68, 13);
-        lblResourceRate.TabIndex = 7;
+        lblResourceRate.TabIndex = 9;
         lblResourceRate.Text = "⚡ Quét 0.1s";
         // 
         // lblGridTitle
@@ -449,7 +456,6 @@ partial class MainForm
     private Panel pnlOuterBorder;
     private Label lblTitle;
     private Button btnThemeToggle;
-    private Button btnCropTest;
     private Panel pnlStatusRow;
     private Button btnToggleMacro;
     private Label lblStatusTitle;
@@ -474,5 +480,7 @@ partial class MainForm
     private Label lblResourceGold;
     private Label lblResSep3;
     private Label lblResourceStone;
+    private Label lblResSep4;
+    private Label lblResourcePop;
     private Label lblResourceRate;
 }

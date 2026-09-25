@@ -37,9 +37,8 @@ public class ResourceCropSettings
 
 public class PopCropSettings
 {
-    public ResourceCropBox PopBox { get; set; } = new(650, 27, 63, 13);
-    public int BrightnessThreshold { get; set; } = 175;
-    public int MaxSaturation { get; set; } = 35; // Ngưỡng chênh lệch màu max(R,G,B) - min(R,G,B) để loại bỏ nền bản đồ
+    public ResourceCropBox PopBox { get; set; } = new(672, 27, 52, 12);
+    public int Threshold { get; set; } = 255; // Ngưỡng điểm ảnh trắng (R==255 && G==255 && B==255)
 }
 
 public class PopValues
@@ -48,6 +47,12 @@ public class PopValues
     public int? MaxPop { get; set; }
 
     public bool IsValid => CurrentPop.HasValue && MaxPop.HasValue;
+
+    public bool EqualsValues(PopValues? other)
+    {
+        if (other is null) return false;
+        return CurrentPop == other.CurrentPop && MaxPop == other.MaxPop;
+    }
 
     public override string ToString()
     {
