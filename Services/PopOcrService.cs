@@ -57,6 +57,13 @@ public class PopOcrService : IDisposable
         }
     }
 
+    public void Reset()
+    {
+        _lastRecognizedValues = null;
+        _lastSuccessfulScanTime = DateTime.MinValue;
+        _isScanningActive = false;
+    }
+
     public PopOcrService(PopCropSettings? settings = null)
     {
         _cropSettings = settings ?? ConfigService.LoadSettings().PopCrop ?? new PopCropSettings();

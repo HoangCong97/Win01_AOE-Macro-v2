@@ -37,6 +37,13 @@ public class TimerOcrService : IDisposable
         }
     }
 
+    public void Reset()
+    {
+        _lastRecognizedValues = null;
+        _lastSuccessfulScanTime = DateTime.MinValue;
+        _isScanningActive = false;
+    }
+
     public TimerOcrService(TimerCropSettings? settings = null)
     {
         _cropSettings = settings ?? ConfigService.LoadSettings().TimerCrop ?? new TimerCropSettings();

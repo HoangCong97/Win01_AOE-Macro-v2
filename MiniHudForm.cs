@@ -270,6 +270,32 @@ public class MiniHudForm : Form
         Invalidate();
     }
 
+    /// <summary>
+    /// Đưa toàn bộ thông số trên Mini HUD về trạng thái ban đầu:
+    /// Các số liệu đưa về rỗng (--), bật trạng thái dimmed, tắt mọi cảnh báo nhấp nháy.
+    /// </summary>
+    public void ResetAllData()
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(ResetAllData));
+            return;
+        }
+
+        _resourceValues = new ResourceValues();
+        _popValues = new PopValues();
+        _timerValues = new TimerValues();
+        _isDimmed = true;
+        _shouldBlink = false;
+        _blinkPhase = false;
+        _isMaxPop = false;
+        _popBlinkTimer.Stop();
+        _suppressTimer.Stop();
+        _popWarningSuppressedUntil = DateTime.MinValue;
+        Invalidate();
+    }
+
     private void CheckPopBlinkCondition()
     {
         if (_isDimmed)

@@ -60,9 +60,22 @@
     - **Kiểm soát trigger lặp lại**: Chỉ cho phép chạy đúng 1 lần trong mỗi ván đấu. Chỉ kích hoạt lại nếu đã từng quan sát thấy tài nguyên thay đổi khác 200 Gỗ / 200 Thực (restart ván mới) hoặc thoát game vào lại.
     - **Giới hạn thời gian tối thiểu**: Khoảng cách tối thiểu giữa 2 lần kích hoạt là 5 giây.
 
-**Chức năng: Mở bảng ngoại giao**
+**Chức năng: Mở bảng ngoại giao & Timeline**
 (F3): Click nút Diplomacy (bảng ngoại giao) - Khóa chuột và ghim tại nút trong thời gian xử lý, sau khi xong trả chuột và bù vào chuyển động đã mất của người dùng.
 (F4): Mở timeline [F10 -> Mũi tên xuống * 2 -> Enter] - Khóa chuột tại chỗ trong thời gian mở menu để tránh sai sót, sau khi xong trả chuột và bù vào chuyển động đã mất của người dùng. 
+
+**Chức năng: Làm mới toàn bộ trạng thái (Refresh - Phím F5)**
+- Khi ấn phím (F5), phần mềm sẽ đưa tất cả về trạng thái ban đầu:
+  + **Bộ đếm ruộng**: Dừng và reset cả 2 đạo ruộng 1 và 2 về trạng thái ban đầu (`-1, -1`), tắt toàn bộ chuông còi cảnh báo bíp / MIDI alarm.
+  + **Thông số tài nguyên, POP, Timer**: Xóa sạch toàn bộ thông số về dạng `--` (Gỗ: `--`, Thịt: `--`, Vàng: `--`, Đá: `--`, POP: `--/--`, Giờ: `--:--`), chuyển trạng thái giá trị về làm mờ (dimmed) trên cả Form chính và Mini HUD.
+  + **Bộ nhớ đệm OCR**: Xóa toàn bộ cache nhận diện của các dịch vụ OCR (Resource, POP, Timer) để không bị kẹt số liệu từ ván trước.
+  + **Trạng thái Macro**: Reset sạch sẽ chuỗi kích đời 3 (ALT), chuỗi Vẩy E, móng xây nhà nhanh, chế độ đặt cờ, cờ ngăn cảnh báo POP 20 giây và nhả sạch các phím phần cứng ảo nếu đang bị kẹt.
+
+**Chức năng: Chế độ Test (Test Mode - Phím F6 Toggle)**
+- Phím (F6) hoạt động như một công tắc Bật/Tắt (Toggle) chế độ thử nghiệm:
+  + **Khi BẬT (F6)**: Toàn bộ key map (xây nhà nhanh, xin dân, vẩy E, làm mới ruộng, kích đời 3, đặt cờ, click chuột đặt móng, xóa đơn vị, v.v.) sẽ **HOẠT ĐỘNG NGAY CẢ KHI KHÔNG Ở IN-GAME** (có thể test tự do ngoài Desktop, Notepad, v.v.).
+  + Giao diện phần mềm hiển thị trạng thái `🧪 TEST MODE (Bật ngoài game)` với màu tím hồng nổi bật để người dùng dễ nhận biết.
+  + **Khi TẮT (Ấn lại F6)**: Phần mềm trở về chế độ thông thường, chỉ kích hoạt macro khi nhận diện được thanh tài nguyên in-game thực tế, khi ở ngoài game phím hoạt động nguyên bản của hệ thống. 
 
 **Chức năng: Click 5 ô biểu tượng / Xin quân lẻ**
 - (Numpad 1..5): Click vào ô biểu tượng lệnh số 1 đến 5 ở góc dưới giao diện game. Tự động khóa chuột và ghim tại ô biểu tượng trong thời gian xử lý, sau khi click xong trả chuột và bù vào chuyển động đã mất của người dùng. 

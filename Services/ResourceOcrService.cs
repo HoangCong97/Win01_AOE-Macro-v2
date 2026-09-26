@@ -95,6 +95,12 @@ public class ResourceOcrService : IDisposable
         }
     }
 
+    public void Reset()
+    {
+        _lastRecognizedValues = null;
+        _lastSuccessfulScanTime = DateTime.MinValue;
+    }
+
     public ResourceOcrService(ResourceCropSettings? settings = null)
     {
         _cropSettings = settings ?? ConfigService.LoadSettings().ResourceCrop ?? new ResourceCropSettings();

@@ -62,7 +62,11 @@ public class ControlEngine : IDisposable
     public event Action<string, Color>? LogRequested;
     public event Action<int, int>? FarmTimerUpdated;
     public event Action? HouseBeBuildingTriggered;
+    public event Action<bool>? TestModeChanged;
+    public event Action? RefreshRequested;
 
+    private bool _isTestMode = false;
+    public bool IsTestMode => _isTestMode;
     public MacroState CurrentState => _currentState;
 
     public ControlEngine()
@@ -225,6 +229,27 @@ public class ControlEngine : IDisposable
 
     public void ToggleF1() => ToggleEnable();
 
+    public void ToggleTestMode()
+    {
+        _isTestMode = !_isTestMode;
+        if (_isTestMode)
+        {
+            Log("[Chế độ Test] BẬT (F6) -> Key map hoạt động tự do ngay cả khi không ở In-game (Ấn F6 để tắt)", Color.Magenta);
+        }
+        else
+        {
+            Log("[Chế độ Test] TẮT (F6) -> Trở về kiểm tra trạng thái In-game", Color.DarkCyan);
+        }
+        TestModeChanged?.Invoke(_isTestMode);
+    }
+
+    public void ExecuteRefreshF5()
+    {
+        ResetAllCountersToInitial();
+        Log("[Làm mới F5] Đã đưa toàn bộ thông số, bộ đếm ruộng và trạng thái macro về ban đầu.", Color.DodgerBlue);
+        RefreshRequested?.Invoke();
+    }
+
     private void OnMouseClick()
     {
         if (_fastBuildManager.IsHoldingKey)
@@ -251,7 +276,7 @@ public class ControlEngine : IDisposable
 
         bool isFarmRefreshWindow = _isFarmRefreshActive && (DateTime.Now - _lastFarmRefreshTime).TotalSeconds <= 6.0;
 
-        if (_currentState == MacroState.Active && _gameWatcher.IsInGame && _isPhysicalShiftDown && isFarmRefreshWindow)
+        if (((_currentState == MacroState.Active && _gameWatcher.IsInGame) || _isTestMode) && _isPhysicalShiftDown && isFarmRefreshWindow)
         {
             _isShiftTemporarilyReleasedForMouse = true;
             InputSimulator.ReleaseShiftKeysHardware();
@@ -267,7 +292,7 @@ public class ControlEngine : IDisposable
             Task.Run(async () =>
             {
                 await Task.Delay(15);
-                if (_currentState == MacroState.Active && _gameWatcher.IsInGame && _isPhysicalShiftDown && !_isShiftTemporarilyReleasedForMouse && !_isRightMouseDown)
+                if (((_currentState == MacroState.Active && _gameWatcher.IsInGame) || _isTestMode) && _isPhysicalShiftDown && !_isShiftTemporarilyReleasedForMouse && !_isRightMouseDown)
                 {
                     InputSimulator.SendKeyDown((ushort)Keys.ShiftKey);
                 }
@@ -277,7 +302,7 @@ public class ControlEngine : IDisposable
 
     private bool OnLeftClickAction(int msg)
     {
-        if (_currentState != MacroState.Active || !_gameWatcher.IsInGame)
+        if ((_currentState != MacroState.Active || !_gameWatcher.IsInGame) && !_isTestMode)
         {
             return false;
         }
@@ -338,7 +363,7 @@ public class ControlEngine : IDisposable
 
     private bool OnRightClickAction(int msg)
     {
-        if (_currentState != MacroState.Active || !_gameWatcher.IsInGame)
+        if ((_currentState != MacroState.Active || !_gameWatcher.IsInGame) && !_isTestMode)
         {
             return false;
         }
@@ -372,7 +397,7 @@ public class ControlEngine : IDisposable
             if (shouldReleaseShift)
             {
                 Thread.Sleep(5);
-                if (_currentState == MacroState.Active && _gameWatcher.IsInGame && _isPhysicalShiftDown)
+                if (((_currentState == MacroState.Active && _gameWatcher.IsInGame) || _isTestMode) && _isPhysicalShiftDown)
                 {
                     InputSimulator.SendKeyDown((ushort)Keys.ShiftKey);
                 }
@@ -401,7 +426,7 @@ public class ControlEngine : IDisposable
 
     private bool OnMiddleClickAction(int msg)
     {
-        if (_currentState != MacroState.Active || !_gameWatcher.IsInGame)
+        if ((_currentState != MacroState.Active || !_gameWatcher.IsInGame) && !_isTestMode)
         {
             return false;
         }
@@ -409,7 +434,7 @@ public class ControlEngine : IDisposable
         if (msg == 0x0207) // WM_MBUTTONDOWN
         {
             ResetAllChains();
-            _deleteManager.HandleMiddleButtonDown(Log, () => _currentState == MacroState.Active && _gameWatcher.IsInGame);
+            _deleteManager.HandleMiddleButtonDown(Log, () => (_currentState == MacroState.Active && _gameWatcher.IsInGame) || _isTestMode);
             return true;
         }
         else if (msg == 0x0208) // WM_MBUTTONUP
@@ -519,6 +544,20 @@ public class ControlEngine : IDisposable
     {
         Keys key = (Keys)vkCode;
 
+        // 1. Phím F6: Toggle Bật/Tắt Chế độ Test (Key map hoạt động ngoài game)
+        if (key == Keys.F6 && isKeyDown)
+        {
+            ToggleTestMode();
+            return true;
+        }
+
+        // 2. Phím F5: Làm mới toàn bộ thông số, bộ đếm ruộng và trạng thái macro
+        if (key == Keys.F5 && isKeyDown)
+        {
+            ExecuteRefreshF5();
+            return true;
+        }
+
         // Nếu Macro ở trạng thái Tắt (Disabled) -> Cho phím đi qua hoàn toàn
         if (_currentState == MacroState.Disabled)
         {
@@ -526,19 +565,20 @@ public class ControlEngine : IDisposable
         }
 
         // Phải ở trong game (nhận diện được thanh tài nguyên) để thực thi các macro game
-        if (!_gameWatcher.IsInGame)
+        // NGOẠI TRỪ khi đang ở Chế độ Test (_isTestMode == true)
+        if (!_gameWatcher.IsInGame && !_isTestMode)
         {
             return false;
         }
 
-        // Khóa hoàn toàn chức năng phím Windows khi đang InGame
+        // Khóa hoàn toàn chức năng phím Windows khi đang InGame hoặc trong Chế độ Test
         if (key == Keys.LWin || key == Keys.RWin)
         {
             return true;
         }
 
         // 2. Chat toggles (Enter & Escape)
-        if (_currentState == MacroState.Active)
+        if (_currentState == MacroState.Active || _isTestMode)
         {
             if (isKeyDown && key == Keys.Enter)
             {
@@ -557,8 +597,8 @@ public class ControlEngine : IDisposable
             }
         }
 
-        // Nếu không ở trạng thái Active (Hoạt động) -> Cho phím đi qua
-        if (_currentState != MacroState.Active)
+        // Nếu không ở trạng thái Active (Hoạt động) và không ở Chế độ Test -> Cho phím đi qua
+        if (_currentState != MacroState.Active && !_isTestMode)
         {
             return false;
         }

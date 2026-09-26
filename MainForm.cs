@@ -60,6 +60,8 @@ public partial class MainForm : Form
         _controlEngine.LogRequested += AppendLog;
         _controlEngine.FarmTimerUpdated += OnFarmTimerUpdated;
         _controlEngine.HouseBeBuildingTriggered += OnHouseBeBuildingTriggered;
+        _controlEngine.TestModeChanged += OnTestModeChanged;
+        _controlEngine.RefreshRequested += OnRefreshRequested;
         _ocrService.ResourcesUpdated += OnResourcesUpdated;
         _ocrService.InGameStatusChanged += OnInGameStatusChangedFromResource;
         _popOcrService.PopUpdated += OnPopUpdated;
@@ -631,6 +633,51 @@ public partial class MainForm : Form
         _hudForm?.SuppressPopWarning(20);
     }
 
+    private void OnTestModeChanged(bool isTestMode)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(new Action<bool>(OnTestModeChanged), isTestMode); } catch { }
+            return;
+        }
+        UpdateStatusUI(_controlEngine.CurrentState);
+    }
+
+    private void OnRefreshRequested()
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(new Action(OnRefreshRequested)); } catch { }
+            return;
+        }
+
+        // 1. Reset các biến lưu trữ thông số về rỗng (hiển thị --)
+        _lastKnownResources.Wood = null;
+        _lastKnownResources.Food = null;
+        _lastKnownResources.Gold = null;
+        _lastKnownResources.Stone = null;
+        _lastKnownPop.CurrentPop = null;
+        _lastKnownPop.MaxPop = null;
+        _lastKnownTimer.RawText = "";
+        _currentTimer = new TimerValues();
+        _isDataDimmed = true;
+        _popSuppressedUntil = DateTime.MinValue;
+
+        // 2. Xóa sạch bộ nhớ đệm OCR
+        _ocrService.Reset();
+        _popOcrService.Reset();
+        _timerOcrService.Reset();
+
+        // 3. Render lại toàn bộ giao diện Form chính về dạng --
+        RenderAllDataText();
+        UpdateFarmTimerUI(-1, -1);
+
+        // 4. Đưa Mini HUD về trạng thái sơ khai ban đầu
+        _hudForm?.ResetAllData();
+    }
+
     private void OnPopUpdated(PopValues pop)
     {
         if (IsDisposed) return;
@@ -770,6 +817,14 @@ public partial class MainForm : Form
 
     private void UpdateStatusUI(MacroState state)
     {
+        if (_controlEngine.IsTestMode)
+        {
+            lblStatusValue.Text = "🧪 TEST MODE (Bật ngoài game)";
+            lblStatusValue.ForeColor = Color.FromArgb(185, 45, 230); // Tím hồng nổi bật
+            btnToggleMacro.Text = "Tắt Macro";
+            return;
+        }
+
         switch (state)
         {
             case MacroState.Disabled:
