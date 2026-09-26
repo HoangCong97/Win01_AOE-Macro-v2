@@ -52,6 +52,12 @@ public class ControlEngine : IDisposable
     private bool _isFarmRefreshActive = false;
     private DateTime _lastFarmRefreshTime = DateTime.MinValue;
 
+    // Khởi đầu nhanh tự động (Auto Fast Start) tracking state
+    private volatile bool _isAutoStartExecuting = false;
+    private DateTime _lastAutoStartTime = DateTime.MinValue;
+    private bool _hasAutoStartedForCurrentGame = false;
+    private bool _hasObservedNonInitialResources = false;
+
     public event Action<MacroState>? StateChanged;
     public event Action<string, Color>? LogRequested;
     public event Action<int, int>? FarmTimerUpdated;
@@ -197,28 +203,9 @@ public class ControlEngine : IDisposable
         }
         else
         {
-            ResetAllChains();
-            _deleteManager.Reset();
-            _ctrlFCount = 0;
-            _ctrlGCount = 0;
-            _activeFarmGroup = 0;
-            _isPhysicalShiftDown = false;
-            _isPhysicalCtrlDown = false;
-            _isRightMouseDown = false;
-            _isShiftTemporarilyReleasedForMouse = false;
-            InputSimulator.ReleaseShiftKeysHardware();
-            InputSimulator.ReleaseCtrlKeysHardware();
-            _isAltDown = false;
-            _isAltCombo = false;
-            InputSimulator.ReleaseAltKeysHardware();
-            ExitFlagMode();
-            _isFarmRefreshActive = false;
-            _lastFarmRefreshTime = DateTime.MinValue;
-            _winKeyState = 0;
-            _lastWinKeyTime = DateTime.MinValue;
-            _f2LoopTimer.Stop();
-            _isF2Pressed = false;
-            _farmTimerManager.StopAllTimersAndAlarms();
+            ResetAllCountersToInitial();
+            _hasAutoStartedForCurrentGame = false;
+            _hasObservedNonInitialResources = false;
             MidiPlayer.PlayToggleOffSound();
             SetState(MacroState.Disabled, "Macro TẮT (F1) -> Trạng thái: [Vô hiệu hóa]");
         }
@@ -445,6 +432,8 @@ public class ControlEngine : IDisposable
     {
         if (!inGame)
         {
+            _hasAutoStartedForCurrentGame = false;
+            _hasObservedNonInitialResources = false;
             MouseLockManager.ForceUnlock();
             _vayEManager.Reset();
             _deleteManager.Reset();
@@ -1248,6 +1237,140 @@ public class ControlEngine : IDisposable
         {
             ExecuteH_C();
         }
+    }
+
+    public bool TryTriggerAutoFastStart(ResourceValues res, TimerValues? timer)
+    {
+        // 0. Macro phải đang ở trạng thái Hoạt động (F1 Active)
+        if (_currentState != MacroState.Active)
+        {
+            return false;
+        }
+
+        // 1. Disable khi đã đọc được timer (timer.IsValid có nghĩa là đồng hồ game đã xuất hiện hoặc đang trong trận)
+        if (timer != null && timer.IsValid)
+        {
+            return false;
+        }
+
+        // 2. Kiểm tra điều kiện tài nguyên khởi đầu trận đấu AOE (Gỗ: 200, Thực: 200)
+        bool isInitialResources = (res != null && res.Wood == 200 && res.Food == 200);
+        if (!isInitialResources)
+        {
+            if (res != null && !res.IsEmpty && (res.Wood != 200 || res.Food != 200))
+            {
+                _hasObservedNonInitialResources = true;
+            }
+            return false;
+        }
+
+        // 3. Phải đang trong game
+        if (!_gameWatcher.IsInGame)
+        {
+            return false;
+        }
+
+        // 4. Kiểm soát trigger đè: Nếu đang thực thi chuỗi khởi đầu nhanh thì bỏ qua
+        if (_isAutoStartExecuting)
+        {
+            return false;
+        }
+
+        // 5. Kiểm soát trigger lặp lại:
+        // Nếu đã từng chạy cho trận này, chỉ cho phép chạy lại nếu tài nguyên đã từng thay đổi khác 200 Gỗ / 200 Thực (restart trận mới)
+        // và khoảng cách thời gian tối thiểu >= 25 giây
+        if (_hasAutoStartedForCurrentGame)
+        {
+            if (_hasObservedNonInitialResources && (DateTime.UtcNow - _lastAutoStartTime).TotalSeconds >= 25)
+            {
+                _hasAutoStartedForCurrentGame = false;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        // 6. Giới hạn thời gian tối thiểu giữa các lần kích hoạt
+        if ((DateTime.UtcNow - _lastAutoStartTime).TotalSeconds < 25)
+        {
+            return false;
+        }
+
+        _hasAutoStartedForCurrentGame = true;
+        _hasObservedNonInitialResources = false;
+        _lastAutoStartTime = DateTime.UtcNow;
+
+        ExecuteAutoFastStart();
+        return true;
+    }
+
+    private void ExecuteAutoFastStart()
+    {
+        _isAutoStartExecuting = true;
+        _mouseHook.BlockMouseClicks = true;
+        Log("[Khởi đầu nhanh tự động] Nhận diện tài nguyên khởi đầu (200 Gỗ / 200 Thực) -> Thực thi F4 > F11 và 8x (H > C)...", Color.DarkBlue);
+
+        Task.Run(() =>
+        {
+            try
+            {
+                // 1. Nhấn F4 > F11
+                InputSimulator.SendKeyPress((ushort)Keys.F4, 20);
+                Thread.Sleep(30);
+                InputSimulator.SendKeyPress((ushort)Keys.F11, 20);
+                Thread.Sleep(40);
+
+                // 2. Nhấn (H > C) nhanh 8 lần
+                for (int i = 0; i < 8; i++)
+                {
+                    InputSimulator.SendKeyPress((ushort)Keys.H, 10);
+                    Thread.Sleep(15);
+                    InputSimulator.SendKeyPress((ushort)Keys.C, 10);
+                    Thread.Sleep(25);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"[Khởi đầu nhanh tự động] Lỗi: {ex.Message}", Color.Red);
+            }
+            finally
+            {
+                // 3. Mở lại click chuột trái, phải
+                _mouseHook.BlockMouseClicks = false;
+                _isAutoStartExecuting = false;
+
+                // 4. Reset tất cả các bộ đếm về trạng thái sơ khai
+                ResetAllCountersToInitial();
+                Log("[Khởi đầu nhanh tự động] Hoàn tất 8x (H > C) -> Đã mở lại chuột và reset tất cả bộ đếm về trạng thái sơ khai.", Color.DarkGreen);
+            }
+        });
+    }
+
+    public void ResetAllCountersToInitial()
+    {
+        ResetAllChains();
+        _deleteManager.Reset();
+        _ctrlFCount = 0;
+        _ctrlGCount = 0;
+        _activeFarmGroup = 0;
+        _isPhysicalShiftDown = false;
+        _isPhysicalCtrlDown = false;
+        _isRightMouseDown = false;
+        _isShiftTemporarilyReleasedForMouse = false;
+        InputSimulator.ReleaseShiftKeysHardware();
+        InputSimulator.ReleaseCtrlKeysHardware();
+        _isAltDown = false;
+        _isAltCombo = false;
+        InputSimulator.ReleaseAltKeysHardware();
+        ExitFlagMode();
+        _isFarmRefreshActive = false;
+        _lastFarmRefreshTime = DateTime.MinValue;
+        _winKeyState = 0;
+        _lastWinKeyTime = DateTime.MinValue;
+        _f2LoopTimer.Stop();
+        _isF2Pressed = false;
+        _farmTimerManager.StopAllTimersAndAlarms();
     }
 
     private void ExecuteAge3FastUpgrade()

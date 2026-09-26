@@ -11,6 +11,9 @@ public partial class MainForm : Form
     private readonly List<KeyMapItem> _keyMappings = new();
     private readonly ResourceOcrService _ocrService = new();
     private readonly PopOcrService _popOcrService = new();
+    private readonly TimerOcrService _timerOcrService = new();
+    private MiniHudForm? _hudForm;
+    private volatile TimerValues _currentTimer = new();
 
     public MainForm()
     {
@@ -46,6 +49,7 @@ public partial class MainForm : Form
         _controlEngine.FarmTimerUpdated += OnFarmTimerUpdated;
         _ocrService.ResourcesUpdated += OnResourcesUpdated;
         _popOcrService.PopUpdated += OnPopUpdated;
+        _timerOcrService.TimerUpdated += OnTimerUpdated;
 
         ApplyTheme();
         UpdateStatusUI(_controlEngine.CurrentState);
@@ -55,22 +59,83 @@ public partial class MainForm : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
+        RestoreWindowPosition();
         _controlEngine.Start();
         _ocrService.Start();
         _popOcrService.Start();
+        _timerOcrService.Start();
+
+        var hudSettings = ConfigService.LoadSettings().Hud ?? new HudSettings();
+        _hudForm = new MiniHudForm(hudSettings);
+        if (hudSettings.Enabled)
+        {
+            _hudForm.Show();
+        }
+        UpdateHudButtonText();
+    }
+
+    private void RestoreWindowPosition()
+    {
+        try
+        {
+            var settings = ConfigService.LoadSettings();
+            if (settings.WindowX.HasValue && settings.WindowY.HasValue)
+            {
+                int x = settings.WindowX.Value;
+                int y = settings.WindowY.Value;
+
+                bool isVisibleOnAnyScreen = false;
+                foreach (var screen in Screen.AllScreens)
+                {
+                    if (screen.WorkingArea.IntersectsWith(new Rectangle(x, y, Width, Height)))
+                    {
+                        isVisibleOnAnyScreen = true;
+                        break;
+                    }
+                }
+
+                if (isVisibleOnAnyScreen)
+                {
+                    StartPosition = FormStartPosition.Manual;
+                    Location = new Point(x, y);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private void SaveWindowPosition()
+    {
+        try
+        {
+            var appSettings = ConfigService.LoadSettings();
+            appSettings.FarmTimerInterval = (int)numFarmInterval.Value;
+            if (WindowState == FormWindowState.Normal)
+            {
+                appSettings.WindowX = Location.X;
+                appSettings.WindowY = Location.Y;
+            }
+            ConfigService.SaveSettings(appSettings);
+        }
+        catch { }
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        var appSettings = ConfigService.LoadSettings();
-        appSettings.FarmTimerInterval = (int)numFarmInterval.Value;
-        ConfigService.SaveSettings(appSettings);
+        SaveWindowPosition();
+
+        _hudForm?.SavePosition();
+        _hudForm?.Close();
+        _hudForm?.Dispose();
 
         _ocrService.Stop();
         _ocrService.Dispose();
 
         _popOcrService.Stop();
         _popOcrService.Dispose();
+
+        _timerOcrService.Stop();
+        _timerOcrService.Dispose();
 
         _controlEngine.Stop();
         _controlEngine.Dispose();
@@ -104,6 +169,7 @@ public partial class MainForm : Form
                 ResumeLayout(true);
                 Invalidate(true);
                 Update();
+                SaveWindowPosition();
                 break;
         }
 
@@ -204,6 +270,39 @@ public partial class MainForm : Form
         AppendLog($"Đã chuyển sang giao diện: {(_isDarkMode ? "Tối (Dark Theme)" : "Sáng (Light Theme)")}", _isDarkMode ? Color.Cyan : Color.Blue);
     }
 
+    private void BtnToggleHud_Click(object? sender, EventArgs e)
+    {
+        if (_hudForm == null || _hudForm.IsDisposed)
+        {
+            var hudSettings = ConfigService.LoadSettings().Hud ?? new HudSettings();
+            _hudForm = new MiniHudForm(hudSettings);
+        }
+
+        if (_hudForm.Visible)
+        {
+            _hudForm.Hide();
+            var s = ConfigService.LoadSettings();
+            s.Hud ??= new HudSettings();
+            s.Hud.Enabled = false;
+            ConfigService.SaveSettings(s);
+        }
+        else
+        {
+            _hudForm.Show();
+            var s = ConfigService.LoadSettings();
+            s.Hud ??= new HudSettings();
+            s.Hud.Enabled = true;
+            ConfigService.SaveSettings(s);
+        }
+        UpdateHudButtonText();
+    }
+
+    private void UpdateHudButtonText()
+    {
+        bool isShown = _hudForm != null && !_hudForm.IsDisposed && _hudForm.Visible;
+        btnToggleHud.Text = isShown ? "🖥️ Mini HUD: Bật" : "🖥️ Mini HUD: Tắt";
+    }
+
     private void NumFarmInterval_ValueChanged(object? sender, EventArgs e)
     {
         int val = (int)numFarmInterval.Value;
@@ -271,6 +370,11 @@ public partial class MainForm : Form
         btnThemeToggle.ForeColor = textColor;
         btnThemeToggle.FlatAppearance.BorderColor = borderColor;
 
+        btnToggleHud.BackColor = cellBg;
+        btnToggleHud.ForeColor = textColor;
+        btnToggleHud.FlatAppearance.BorderColor = borderColor;
+        UpdateHudButtonText();
+
         btnToggleMacro.BackColor = cellBg;
         btnToggleMacro.ForeColor = textColor;
         btnToggleMacro.FlatAppearance.BorderColor = borderColor;
@@ -297,7 +401,7 @@ public partial class MainForm : Form
         lblResSep3.ForeColor = sepColor;
         lblResSep4.ForeColor = sepColor;
         lblResourcePop.ForeColor = _isDarkMode ? Color.FromArgb(235, 130, 255) : Color.FromArgb(142, 36, 170);
-        lblResourceRate.ForeColor = _isDarkMode ? Color.Gray : Color.DarkGray;
+        lblResourceRate.ForeColor = _isDarkMode ? Color.FromArgb(100, 210, 255) : Color.FromArgb(0, 130, 220);
 
         foreach (Control ctrl in pnlKeyboardGrid.Controls)
         {
@@ -328,6 +432,8 @@ public partial class MainForm : Form
 
     private void OnResourcesUpdated(ResourceValues res)
     {
+        _controlEngine.TryTriggerAutoFastStart(res, _currentTimer);
+
         if (IsDisposed) return;
 
         if (InvokeRequired)
@@ -350,6 +456,8 @@ public partial class MainForm : Form
         lblResourceFood.Text = $"🥩 Thịt: {(res.Food.HasValue ? res.Food.Value.ToString("N0") : "--")}";
         lblResourceGold.Text = $"🪙 Vàng: {(res.Gold.HasValue ? res.Gold.Value.ToString("N0") : "--")}";
         lblResourceStone.Text = $"🪨 Đá: {(res.Stone.HasValue ? res.Stone.Value.ToString("N0") : "--")}";
+
+        _hudForm?.UpdateResources(res);
     }
 
     private void OnPopUpdated(PopValues pop)
@@ -373,6 +481,34 @@ public partial class MainForm : Form
     private void UpdatePopUI(PopValues pop)
     {
         lblResourcePop.Text = $"👥 POP: {(pop.IsValid ? $"{pop.CurrentPop}/{pop.MaxPop}" : (pop.CurrentPop.HasValue ? $"{pop.CurrentPop}/--" : "--/--"))}";
+
+        _hudForm?.UpdatePop(pop);
+    }
+
+    private void OnTimerUpdated(TimerValues timer)
+    {
+        _currentTimer = timer;
+
+        if (IsDisposed) return;
+
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(new Action<TimerValues>(UpdateTimerUI), timer);
+            }
+            catch { }
+        }
+        else
+        {
+            UpdateTimerUI(timer);
+        }
+    }
+
+    private void UpdateTimerUI(TimerValues timer)
+    {
+        lblResourceRate.Text = $"⏱️ {(timer.IsValid ? timer.RawText : "--:--")}";
+        _hudForm?.UpdateTimer(timer);
     }
 
     private void OnFarmTimerUpdated(int rem1, int rem2)
@@ -434,6 +570,11 @@ public partial class MainForm : Form
 
     private void OnEngineStateChanged(MacroState state)
     {
+        bool isAppEnabled = (state != MacroState.Disabled);
+        _ocrService.SetEnabled(isAppEnabled);
+        _popOcrService.SetEnabled(isAppEnabled);
+        _timerOcrService.SetEnabled(isAppEnabled);
+
         if (IsDisposed) return;
 
         if (InvokeRequired)

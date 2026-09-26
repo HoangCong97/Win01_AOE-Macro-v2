@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -18,6 +18,7 @@ public class MouseHookManager : IDisposable
     private bool _isMiddleDownIntercepted = false;
     private bool _isLeftDownIntercepted = false;
     private bool _isRightDownIntercepted = false;
+    public volatile bool BlockMouseClicks = false;
 
     public event Action? MouseClicked;
     public event Action? RightButtonDown;
@@ -150,6 +151,12 @@ public class MouseHookManager : IDisposable
 
             // Cháº·n toÃ n bá»™ thao tÃ¡c click chuá»™t váº­t lÃ½ cá»§a ngÆ°á»i dÃ¹ng khi Ä‘ang khÃ³a chuá»™t
             if (MouseLockManager.IsLocked)
+            {
+                return (IntPtr)1;
+            }
+
+            // Vô hiệu hóa click chuột trái, phải trong khoảng thời gian Khởi đầu nhanh
+            if (BlockMouseClicks && (msg == 0x0201 || msg == 0x0202 || msg == 0x0204 || msg == 0x0205))
             {
                 return (IntPtr)1;
             }

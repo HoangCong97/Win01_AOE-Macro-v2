@@ -25,6 +25,8 @@ public static class ConfigService
                     }
                     settings.ResourceCrop ??= new ResourceCropSettings();
                     settings.PopCrop ??= new PopCropSettings();
+                    settings.TimerCrop ??= new TimerCropSettings();
+                    settings.Hud ??= new HudSettings();
                     return settings;
                 }
             }

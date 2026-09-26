@@ -1,0 +1,41 @@
+﻿{
+  "project_name": "PopAoe",
+  "package_name": "TimerAoe",
+  "export_time": "2026-09-26T12:24:10",
+  "summary": {
+    "total_areas": 1,
+    "total_crops": 1,
+    "has_source_images": false
+  },
+  "areas": [
+    {
+      "id": 1,
+      "name": "Time area",
+      "source_image": "pop135248.png",
+      "source_width": 1366,
+      "source_height": 768,
+      "x": 4,
+      "y": 27,
+      "width": 54,
+      "height": 12,
+      "aspect_ratio": "9:2",
+      "crop_file": null
+    }
+  ],
+  "crops": [
+    {
+      "id": 1,
+      "name": "Phân tách",
+      "file_name": "crop_001_Phân tách.png",
+      "relative_path": "crops/crop_001_Phân tách.png",
+      "source_image": "pop135248.png",
+      "source_width": 1366,
+      "source_height": 768,
+      "x": 20,
+      "y": 31,
+      "width": 2,
+      "height": 7,
+      "aspect_ratio": "2:7"
+    }
+  ]
+}

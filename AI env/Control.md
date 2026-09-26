@@ -25,8 +25,20 @@
 - Khi đang [Enabled], vô hiệu hóa công cụ gõ tiếng việt
 
 **Chức năng: Khởi đầu nhanh**
-(F2-F2): Liên tục [H -> C] cho tới khi nhả F2, sau khi nhả F2 thì [F4-F11]
-*Nếu macro chưa bật, sẽ bật macro lên*
+- **Thủ công (F2-F2)**: Liên tục [H -> C] cho tới khi nhả F2, sau khi nhả F2 thì [F4-F11]. *Nếu macro đang ở trạng thái Tắt (F1 Disabled), bấm F2 sẽ tự động bật Macro lên trạng thái Hoạt động (Active) và thực thi ngay lập tức*.
+- **Tự động nhận diện (Auto Fast Start)**:
+  - **Điều kiện kích hoạt**: Khi Macro đang ở trạng thái Bật (`Active`), game đang trong trận (`IsInGame`), và OCR đọc được chính xác giá trị tài nguyên khởi đầu trận đấu là `Gỗ: 200, Thịt: 200` (200 Wood, 200 Food).
+  - *Lưu ý trạng thái Tắt*: Khi Macro đang Tắt (F1 Disabled), toàn bộ dịch vụ quét OCR đều dừng hoàn toàn (0% CPU) nên không tự đọc được tài nguyên để tự bật. Người chơi chỉ cần Bật F1 trước trận đấu (hoặc ấn F2 đầu trận để vừa xin dân vừa tự bật F1).
+  - **Thao tác thực thi**:
+    1. Ấn phím: [F4 > F11].
+    2. Sau đó thực hiện [H > C] nhanh 8 lần liên tiếp.
+    3. Trong suốt thời gian thực thi chuỗi này: Vô hiệu hóa toàn bộ click chuột trái và chuột phải vật lý của người dùng để tránh thao tác nhầm / lệch focus.
+    4. Ngay khi thực hiện xong 8 lần [H > C]: Tự động mở lại click chuột trái, phải và reset toàn bộ các bộ đếm / chuỗi phím về trạng thái sơ khai ban đầu.
+  - **Cơ chế kiểm soát an toàn & chống spam**:
+    - **Vô hiệu hóa khi đã có Timer**: Nếu đã nhận diện được đồng hồ game (`timer.IsValid` - tức là game đã chạy qua giai đoạn đầu hoặc đã nhấn F11 hiển thị timer), chức năng tự động khởi đầu nhanh sẽ bị tắt hoàn toàn.
+    - **Kiểm soát trigger đè**: Không cho phép kích hoạt lặp nếu một chuỗi khởi đầu nhanh đang trong quá trình thực thi.
+    - **Kiểm soát trigger lặp lại**: Chỉ cho phép chạy đúng 1 lần trong mỗi ván đấu. Chỉ kích hoạt lại nếu đã từng quan sát thấy tài nguyên thay đổi khác 200 Gỗ / 200 Thực (restart ván mới) hoặc thoát game vào lại.
+    - **Giới hạn thời gian tối thiểu**: Khoảng cách tối thiểu giữa 2 lần kích hoạt là 25 giây.
 
 **Chức năng: Mở bảng ngoại giao**
 (F3): Click nút Diplomacy (bảng ngoại giao) - Khóa chuột và ghim tại nút trong thời gian xử lý, sau khi xong trả chuột và bù vào chuyển động đã mất của người dùng.

@@ -65,11 +65,30 @@ public class ResourceOcrService : IDisposable
     private int _intervalMs = 120;
     private ResourceCropSettings _cropSettings;
     private ResourceValues? _lastRecognizedValues;
+    private DateTime _lastSuccessfulScanTime = DateTime.MinValue;
+    private bool _isScanningActive = false;
     private volatile bool _isRunning = false;
+    private volatile bool _isEnabled = false;
 
     public event Action<ResourceValues>? ResourcesUpdated;
 
     public bool IsRunning => _isRunning;
+    public bool IsEnabled => _isEnabled;
+
+    public void SetEnabled(bool enabled)
+    {
+        _isEnabled = enabled;
+        if (!enabled)
+        {
+            _isScanningActive = false;
+            _lastRecognizedValues = null;
+            try
+            {
+                ResourcesUpdated?.Invoke(new ResourceValues());
+            }
+            catch { }
+        }
+    }
 
     public ResourceOcrService(ResourceCropSettings? settings = null)
     {
@@ -165,17 +184,40 @@ public class ResourceOcrService : IDisposable
         {
             while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct))
             {
-                if (!_isRunning || _templates.Count == 0) continue;
+                if (!_isRunning || !_isEnabled || _templates.Count == 0)
+                {
+                    await Task.Delay(250, ct);
+                    continue;
+                }
 
                 try
                 {
                     var res = CaptureAndRecognize();
                     if (res != null && !res.IsEmpty)
                     {
+                        _lastSuccessfulScanTime = DateTime.UtcNow;
+                        _isScanningActive = true;
                         if (_lastRecognizedValues == null || !res.EqualsValues(_lastRecognizedValues))
                         {
                             _lastRecognizedValues = res;
                             ResourcesUpdated?.Invoke(res);
+                        }
+                    }
+                    else
+                    {
+                        // Không quét được (thoát game, thay tab ra ngoài, hoặc trong menu)
+                        if (_isScanningActive && (DateTime.UtcNow - _lastSuccessfulScanTime).TotalSeconds >= 3)
+                        {
+                            // Trong 3s nếu không quét được -> ngừng thu thập các thông số
+                            _isScanningActive = false;
+                            _lastRecognizedValues = null;
+                            ResourcesUpdated?.Invoke(new ResourceValues());
+                        }
+
+                        if (!_isScanningActive)
+                        {
+                            // Khi đang tạm dừng thu thập, ngủ thêm để tiết kiệm CPU
+                            await Task.Delay(400, ct);
                         }
                     }
                 }
@@ -248,15 +290,25 @@ public class ResourceOcrService : IDisposable
             }
         }
 
-        // 1. So khớp với pixel game gốc (chữ sáng màu trên nền tối)
-        int? result = MatchDigits(pixels, cropW, cropH, invert: false);
-        if (result.HasValue) return result;
+        // Đọc cùng lúc cả chữ trắng (invert: false) và chữ đen (invert: true)
+        var whiteMatch = MatchDigits(pixels, cropW, cropH, invert: false);
+        var blackMatch = MatchDigits(pixels, cropW, cropH, invert: true);
 
-        // 2. Nếu như so khớp mà không ra kết quả, đảo ngược pixel game để so sánh (đối với trường hợp số tài nguyên hiển thị màu đen)
-        return MatchDigits(pixels, cropW, cropH, invert: true);
+        // Lấy dữ liệu đọc được nhiều số ký tự nhất
+        if (whiteMatch.Value.HasValue && blackMatch.Value.HasValue)
+        {
+            if (whiteMatch.CharCount > blackMatch.CharCount)
+                return whiteMatch.Value;
+            if (blackMatch.CharCount > whiteMatch.CharCount)
+                return blackMatch.Value;
+            // Nếu cùng số lượng ký tự, chọn kết quả có tổng điểm khớp cao hơn
+            return whiteMatch.Score >= blackMatch.Score ? whiteMatch.Value : blackMatch.Value;
+        }
+
+        return whiteMatch.Value ?? blackMatch.Value;
     }
 
-    private int? MatchDigits(Color[,] pixels, int cropW, int cropH, bool invert)
+    private (int? Value, int CharCount, int Score) MatchDigits(Color[,] pixels, int cropW, int cropH, bool invert)
     {
         // Binarize crop into bool array using consistent threshold 175
         bool[,] cropMatrix = new bool[cropW, cropH];
@@ -275,6 +327,7 @@ public class ResourceOcrService : IDisposable
 
         StringBuilder digits = new();
         int curX = 0;
+        int totalScore = 0;
 
         while (curX <= cropW - 4)
         {
@@ -354,6 +407,7 @@ public class ResourceOcrService : IDisposable
             if (bestMatch != null)
             {
                 digits.Append(bestMatch.Digit);
+                totalScore += bestScore;
                 curX += bestMatch.Width; // Nhảy qua bề ngang chữ số vừa nhận diện thành công
             }
             else
@@ -362,71 +416,45 @@ public class ResourceOcrService : IDisposable
             }
         }
 
-        if (digits.Length == 0) return null;
+        if (digits.Length == 0) return (null, 0, 0);
         if (int.TryParse(digits.ToString(), out int val))
         {
-            return val;
+            return (val, digits.Length, totalScore);
         }
-        return null;
+        return (null, 0, 0);
     }
 
     private static IntPtr FindAoeWindow()
     {
         IntPtr fgHwnd = NativeMethods.GetForegroundWindow();
-        if (fgHwnd != IntPtr.Zero && IsAoeWindow(fgHwnd))
+        if (fgHwnd != IntPtr.Zero && !NativeMethods.IsIconic(fgHwnd) && IsAoeWindow(fgHwnd))
         {
             return fgHwnd;
         }
 
-        try
-        {
-            foreach (var proc in Process.GetProcesses())
-            {
-                try
-                {
-                    string name = proc.ProcessName.ToLowerInvariant();
-                    if (name.Contains("empires") || name.Contains("aoe") || name.Contains("age"))
-                    {
-                        if (proc.MainWindowHandle != IntPtr.Zero)
-                        {
-                            return proc.MainWindowHandle;
-                        }
-                    }
-                }
-                catch { }
-            }
-        }
-        catch { }
-
-        IntPtr found = IntPtr.Zero;
-        try
-        {
-            NativeMethods.EnumWindows((hwnd, lParam) =>
-            {
-                if (NativeMethods.IsWindowVisible(hwnd))
-                {
-                    StringBuilder sb = new(256);
-                    NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-                    string title = sb.ToString();
-                    if (IsAoeTitle(title))
-                    {
-                        found = hwnd;
-                        return false;
-                    }
-                }
-                return true;
-            }, IntPtr.Zero);
-        }
-        catch { }
-
-        return found;
+        // Thoát game hoặc thay tab ra ngoài -> không quét để tránh quét đè cửa sổ khác
+        return IntPtr.Zero;
     }
 
     private static bool IsAoeWindow(IntPtr hwnd)
     {
         StringBuilder sb = new(256);
         NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-        return IsAoeTitle(sb.ToString());
+        if (IsAoeTitle(sb.ToString())) return true;
+
+        try
+        {
+            NativeMethods.GetWindowThreadProcessId(hwnd, out uint pid);
+            if (pid != 0)
+            {
+                using var proc = Process.GetProcessById((int)pid);
+                string name = proc.ProcessName.ToLowerInvariant();
+                return name.Contains("empire") || name.Contains("aoe") || name.Contains("age");
+            }
+        }
+        catch { }
+
+        return false;
     }
 
     private static bool IsAoeTitle(string title)

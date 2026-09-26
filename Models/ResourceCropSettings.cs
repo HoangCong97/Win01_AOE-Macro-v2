@@ -61,3 +61,27 @@ public class PopValues
         return "--";
     }
 }
+
+public class TimerCropSettings
+{
+    public ResourceCropBox TimerBox { get; set; } = new(4, 27, 54, 12);
+    public int Threshold { get; set; } = 255;
+}
+
+public class TimerValues
+{
+    public string? RawText { get; set; }
+
+    public bool IsValid => !string.IsNullOrWhiteSpace(RawText);
+
+    public bool EqualsValues(TimerValues? other)
+    {
+        if (other is null) return false;
+        return RawText == other.RawText;
+    }
+
+    public override string ToString()
+    {
+        return IsValid ? RawText! : "--:--";
+    }
+}

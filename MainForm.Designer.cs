@@ -19,6 +19,7 @@ partial class MainForm
     {
         pnlOuterBorder = new Panel();
         lblTitle = new Label();
+        btnToggleHud = new Button();
         btnThemeToggle = new Button();
         pnlStatusRow = new Panel();
         btnToggleMacro = new Button();
@@ -56,6 +57,7 @@ partial class MainForm
         // 
         pnlOuterBorder.BackColor = Color.White;
         pnlOuterBorder.BorderStyle = BorderStyle.FixedSingle;
+        pnlOuterBorder.Controls.Add(btnToggleHud);
         pnlOuterBorder.Controls.Add(btnThemeToggle);
         pnlOuterBorder.Controls.Add(rtbLog);
         pnlOuterBorder.Controls.Add(lblLogTitle);
@@ -90,6 +92,22 @@ partial class MainForm
         lblTitle.TabIndex = 0;
         lblTitle.Text = "AOE MACRO SYSTEM";
         lblTitle.TextAlign = ContentAlignment.MiddleCenter;
+        // 
+        // btnToggleHud
+        // 
+        btnToggleHud.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnToggleHud.BackColor = Color.White;
+        btnToggleHud.FlatAppearance.BorderColor = Color.Black;
+        btnToggleHud.FlatStyle = FlatStyle.Flat;
+        btnToggleHud.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 0);
+        btnToggleHud.ForeColor = Color.Black;
+        btnToggleHud.Location = new Point(575, 24);
+        btnToggleHud.Name = "btnToggleHud";
+        btnToggleHud.Size = new Size(118, 30);
+        btnToggleHud.TabIndex = 8;
+        btnToggleHud.Text = "🖥️ Mini HUD: Bật";
+        btnToggleHud.UseVisualStyleBackColor = false;
+        btnToggleHud.Click += BtnToggleHud_Click;
         // 
         // btnThemeToggle
         // 
@@ -340,13 +358,13 @@ partial class MainForm
         // 
         lblResourceRate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         lblResourceRate.AutoSize = true;
-        lblResourceRate.Font = new Font("Segoe UI", 8F);
-        lblResourceRate.ForeColor = Color.DarkGray;
-        lblResourceRate.Location = new Point(680, 8);
+        lblResourceRate.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+        lblResourceRate.ForeColor = Color.FromArgb(0, 130, 220);
+        lblResourceRate.Location = new Point(665, 6);
         lblResourceRate.Name = "lblResourceRate";
-        lblResourceRate.Size = new Size(68, 13);
+        lblResourceRate.Size = new Size(80, 17);
         lblResourceRate.TabIndex = 9;
-        lblResourceRate.Text = "⚡ Quét 0.1s";
+        lblResourceRate.Text = "⏱️ --:--";
         // 
         // lblGridTitle
         // 
@@ -455,6 +473,7 @@ partial class MainForm
 
     private Panel pnlOuterBorder;
     private Label lblTitle;
+    private Button btnToggleHud;
     private Button btnThemeToggle;
     private Panel pnlStatusRow;
     private Button btnToggleMacro;
