@@ -1,4 +1,3 @@
-using System.Text;
 using System.Windows.Forms;
 using AOEKeyboardMacroPro.Models;
 
@@ -6,7 +5,6 @@ namespace AOEKeyboardMacroPro.Services;
 
 public class GameStateWatcher : IDisposable
 {
-    private readonly System.Windows.Forms.Timer _checkTimer = new();
     private bool _isInGame = false;
     private bool _isInChat = false;
 
@@ -18,48 +16,23 @@ public class GameStateWatcher : IDisposable
 
     public GameStateWatcher()
     {
-        _checkTimer.Interval = 300; // Check active window title every 300ms
-        _checkTimer.Tick += CheckActiveWindow;
     }
 
     public void Start()
     {
-        _checkTimer.Start();
     }
 
     public void Stop()
     {
-        _checkTimer.Stop();
     }
 
-    private void CheckActiveWindow(object? sender, EventArgs e)
+    public void SetInGameStatus(bool inGame)
     {
-        IntPtr hwnd = NativeMethods.GetForegroundWindow();
-        if (hwnd == IntPtr.Zero) return;
-
-        StringBuilder sb = new(256);
-        NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-        string title = sb.ToString();
-
-        // Check if window is AOE / Age of Empires / Empire / DE / Application title
-        bool newlyInGame = IsAOEGameWindow(title);
-
-        if (newlyInGame != _isInGame)
+        if (_isInGame != inGame)
         {
-            _isInGame = newlyInGame;
+            _isInGame = inGame;
             InGameStatusChanged?.Invoke(_isInGame);
         }
-    }
-
-    private static bool IsAOEGameWindow(string windowTitle)
-    {
-        if (string.IsNullOrWhiteSpace(windowTitle)) return false;
-
-        string titleLower = windowTitle.ToLowerInvariant();
-        return titleLower.Contains("empire") ||
-               titleLower.Contains("age of empires") ||
-               titleLower.Contains("aoe") ||
-               titleLower.Contains("definitive edition");
     }
 
     public void NotifyEnterKey()
@@ -80,7 +53,6 @@ public class GameStateWatcher : IDisposable
     public void Dispose()
     {
         Stop();
-        _checkTimer.Dispose();
         GC.SuppressFinalize(this);
     }
 }

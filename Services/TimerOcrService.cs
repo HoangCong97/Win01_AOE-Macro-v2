@@ -18,12 +18,14 @@ public class TimerOcrService : IDisposable
     private DateTime _lastSuccessfulScanTime = DateTime.MinValue;
     private bool _isScanningActive = false;
     private volatile bool _isRunning = false;
-    private volatile bool _isEnabled = false;
+    private volatile bool _isEnabled = true;
 
     public event Action<TimerValues>? TimerUpdated;
 
     public bool IsRunning => _isRunning;
     public bool IsEnabled => _isEnabled;
+    public bool IsTimerVisibleOnScreen => _isScanningActive && (DateTime.UtcNow - _lastSuccessfulScanTime).TotalMilliseconds <= 1200;
+    public TimerValues? CurrentRealtimeTimer => IsTimerVisibleOnScreen ? _lastRecognizedValues : null;
 
     public void SetEnabled(bool enabled)
     {
@@ -32,11 +34,6 @@ public class TimerOcrService : IDisposable
         {
             _isScanningActive = false;
             _lastRecognizedValues = null;
-            try
-            {
-                TimerUpdated?.Invoke(new TimerValues());
-            }
-            catch { }
         }
     }
 
@@ -249,11 +246,10 @@ public class TimerOcrService : IDisposable
                     else
                     {
                         // Không quét được (thoát game, thay tab ra ngoài, hoặc trong menu)
-                        if (_isScanningActive && (DateTime.UtcNow - _lastSuccessfulScanTime).TotalSeconds >= 3)
+                        if (_isScanningActive && (DateTime.UtcNow - _lastSuccessfulScanTime).TotalMilliseconds >= 1000)
                         {
                             _isScanningActive = false;
                             _lastRecognizedValues = null;
-                            TimerUpdated?.Invoke(new TimerValues());
                         }
 
                         if (!_isScanningActive)
@@ -413,43 +409,22 @@ public class TimerOcrService : IDisposable
     private static IntPtr FindAoeWindow()
     {
         IntPtr fgHwnd = NativeMethods.GetForegroundWindow();
-        if (fgHwnd != IntPtr.Zero && !NativeMethods.IsIconic(fgHwnd) && IsAoeWindow(fgHwnd))
+        if (fgHwnd == IntPtr.Zero || NativeMethods.IsIconic(fgHwnd))
         {
-            return fgHwnd;
+            return IntPtr.Zero;
         }
-
-        return IntPtr.Zero;
-    }
-
-    private static bool IsAoeWindow(IntPtr hwnd)
-    {
-        StringBuilder sb = new(256);
-        NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-        if (IsAoeTitle(sb.ToString())) return true;
 
         try
         {
-            NativeMethods.GetWindowThreadProcessId(hwnd, out uint pid);
-            if (pid != 0)
+            NativeMethods.GetWindowThreadProcessId(fgHwnd, out uint pid);
+            if (pid == Environment.ProcessId)
             {
-                using var proc = Process.GetProcessById((int)pid);
-                string name = proc.ProcessName.ToLowerInvariant();
-                return name.Contains("empire") || name.Contains("aoe") || name.Contains("age");
+                return IntPtr.Zero;
             }
         }
         catch { }
 
-        return false;
-    }
-
-    private static bool IsAoeTitle(string title)
-    {
-        if (string.IsNullOrWhiteSpace(title)) return false;
-        string t = title.ToLowerInvariant();
-        return t.Contains("empire") ||
-               t.Contains("age of empires") ||
-               t.Contains("aoe") ||
-               t.Contains("definitive edition");
+        return fgHwnd;
     }
 
     public void Dispose()

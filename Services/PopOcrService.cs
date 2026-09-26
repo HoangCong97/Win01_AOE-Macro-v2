@@ -40,7 +40,7 @@ public class PopOcrService : IDisposable
     private DateTime _lastSuccessfulScanTime = DateTime.MinValue;
     private bool _isScanningActive = false;
     private volatile bool _isRunning = false;
-    private volatile bool _isEnabled = false;
+    private volatile bool _isEnabled = true;
 
     public event Action<PopValues>? PopUpdated;
 
@@ -54,11 +54,6 @@ public class PopOcrService : IDisposable
         {
             _isScanningActive = false;
             _lastRecognizedValues = null;
-            try
-            {
-                PopUpdated?.Invoke(new PopValues());
-            }
-            catch { }
         }
     }
 
@@ -247,18 +242,18 @@ public class PopOcrService : IDisposable
                     else
                     {
                         // Không quét được (thoát game, thay tab ra ngoài, hoặc trong menu)
-                        if (_isScanningActive && (DateTime.UtcNow - _lastSuccessfulScanTime).TotalSeconds >= 3)
+                        if (_isScanningActive && (DateTime.UtcNow - _lastSuccessfulScanTime).TotalMilliseconds >= 1000)
                         {
-                            // Trong 3s nếu không quét được -> ngừng thu thập các thông số
+                            // Trong 1s nếu không quét được -> ngừng thu thập các thông số
                             _isScanningActive = false;
                             _lastRecognizedValues = null;
-                            PopUpdated?.Invoke(new PopValues());
+                            // Không phát new PopValues() rỗng để giữ lại giá trị cuối cùng
                         }
 
                         if (!_isScanningActive)
                         {
                             // Khi đang tạm dừng thu thập, ngủ thêm để tiết kiệm CPU
-                            await Task.Delay(400, ct);
+                            await Task.Delay(200, ct);
                         }
                     }
                 }
@@ -466,44 +461,22 @@ public class PopOcrService : IDisposable
     private static IntPtr FindAoeWindow()
     {
         IntPtr fgHwnd = NativeMethods.GetForegroundWindow();
-        if (fgHwnd != IntPtr.Zero && !NativeMethods.IsIconic(fgHwnd) && IsAoeWindow(fgHwnd))
+        if (fgHwnd == IntPtr.Zero || NativeMethods.IsIconic(fgHwnd))
         {
-            return fgHwnd;
+            return IntPtr.Zero;
         }
-
-        // Thoát game hoặc thay tab ra ngoài -> không quét để tránh quét đè cửa sổ khác
-        return IntPtr.Zero;
-    }
-
-    private static bool IsAoeWindow(IntPtr hwnd)
-    {
-        StringBuilder sb = new(256);
-        NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-        if (IsAoeTitle(sb.ToString())) return true;
 
         try
         {
-            NativeMethods.GetWindowThreadProcessId(hwnd, out uint pid);
-            if (pid != 0)
+            NativeMethods.GetWindowThreadProcessId(fgHwnd, out uint pid);
+            if (pid == Environment.ProcessId)
             {
-                using var proc = Process.GetProcessById((int)pid);
-                string name = proc.ProcessName.ToLowerInvariant();
-                return name.Contains("empire") || name.Contains("aoe") || name.Contains("age");
+                return IntPtr.Zero;
             }
         }
         catch { }
 
-        return false;
-    }
-
-    private static bool IsAoeTitle(string title)
-    {
-        if (string.IsNullOrWhiteSpace(title)) return false;
-        string t = title.ToLowerInvariant();
-        return t.Contains("empire") ||
-               t.Contains("age of empires") ||
-               t.Contains("aoe") ||
-               t.Contains("definitive edition");
+        return fgHwnd;
     }
 
     public void Dispose()

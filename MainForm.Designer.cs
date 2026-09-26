@@ -147,7 +147,7 @@ partial class MainForm
         btnToggleMacro.Name = "btnToggleMacro";
         btnToggleMacro.Size = new Size(240, 34);
         btnToggleMacro.TabIndex = 0;
-        btnToggleMacro.Text = "[      Kích hoạt (F1)      ]";
+        btnToggleMacro.Text = "[      Kích hoạt Macro      ]";
         btnToggleMacro.UseVisualStyleBackColor = false;
         btnToggleMacro.Click += BtnToggleMacro_Click;
         // 

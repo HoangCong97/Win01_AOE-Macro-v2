@@ -66,27 +66,32 @@ public class ResourceOcrService : IDisposable
     private ResourceCropSettings _cropSettings;
     private ResourceValues? _lastRecognizedValues;
     private DateTime _lastSuccessfulScanTime = DateTime.MinValue;
-    private bool _isScanningActive = false;
     private volatile bool _isRunning = false;
-    private volatile bool _isEnabled = false;
+    private volatile bool _isEnabled = true; // Mặc định BẬT khi khởi động app
+    private bool _isInGame = false;
 
     public event Action<ResourceValues>? ResourcesUpdated;
+    public event Action<bool>? InGameStatusChanged;
 
     public bool IsRunning => _isRunning;
     public bool IsEnabled => _isEnabled;
+    public bool IsInGame => _isInGame;
 
     public void SetEnabled(bool enabled)
     {
         _isEnabled = enabled;
         if (!enabled)
         {
-            _isScanningActive = false;
             _lastRecognizedValues = null;
-            try
+            if (_isInGame)
             {
-                ResourcesUpdated?.Invoke(new ResourceValues());
+                _isInGame = false;
+                try
+                {
+                    InGameStatusChanged?.Invoke(false);
+                }
+                catch { }
             }
-            catch { }
         }
     }
 
@@ -196,7 +201,13 @@ public class ResourceOcrService : IDisposable
                     if (res != null && !res.IsEmpty)
                     {
                         _lastSuccessfulScanTime = DateTime.UtcNow;
-                        _isScanningActive = true;
+
+                        if (!_isInGame)
+                        {
+                            _isInGame = true;
+                            InGameStatusChanged?.Invoke(true);
+                        }
+
                         if (_lastRecognizedValues == null || !res.EqualsValues(_lastRecognizedValues))
                         {
                             _lastRecognizedValues = res;
@@ -205,19 +216,19 @@ public class ResourceOcrService : IDisposable
                     }
                     else
                     {
-                        // Không quét được (thoát game, thay tab ra ngoài, hoặc trong menu)
-                        if (_isScanningActive && (DateTime.UtcNow - _lastSuccessfulScanTime).TotalSeconds >= 3)
+                        // Không đọc được thanh tài nguyên (thoát game, thay tab ra ngoài, hoặc trong menu)
+                        if (_isInGame && (DateTime.UtcNow - _lastSuccessfulScanTime).TotalMilliseconds >= 1000)
                         {
-                            // Trong 3s nếu không quét được -> ngừng thu thập các thông số
-                            _isScanningActive = false;
+                            // Quá 1s không đọc được thanh tài nguyên -> chuyển sang Suspended (ra ngoài game/menu)
+                            _isInGame = false;
                             _lastRecognizedValues = null;
-                            ResourcesUpdated?.Invoke(new ResourceValues());
+                            InGameStatusChanged?.Invoke(false);
                         }
 
-                        if (!_isScanningActive)
+                        if (!_isInGame)
                         {
-                            // Khi đang tạm dừng thu thập, ngủ thêm để tiết kiệm CPU
-                            await Task.Delay(400, ct);
+                            // Khi đang ngoài game, chờ nhẹ 150ms để tiết kiệm CPU mà vẫn phát hiện nhanh khi vào lại game
+                            await Task.Delay(150, ct);
                         }
                     }
                 }
@@ -427,44 +438,23 @@ public class ResourceOcrService : IDisposable
     private static IntPtr FindAoeWindow()
     {
         IntPtr fgHwnd = NativeMethods.GetForegroundWindow();
-        if (fgHwnd != IntPtr.Zero && !NativeMethods.IsIconic(fgHwnd) && IsAoeWindow(fgHwnd))
+        if (fgHwnd == IntPtr.Zero || NativeMethods.IsIconic(fgHwnd))
         {
-            return fgHwnd;
+            return IntPtr.Zero;
         }
 
-        // Thoát game hoặc thay tab ra ngoài -> không quét để tránh quét đè cửa sổ khác
-        return IntPtr.Zero;
-    }
-
-    private static bool IsAoeWindow(IntPtr hwnd)
-    {
-        StringBuilder sb = new(256);
-        NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-        if (IsAoeTitle(sb.ToString())) return true;
-
+        // Bỏ qua nếu là cửa sổ của chính Macro app
         try
         {
-            NativeMethods.GetWindowThreadProcessId(hwnd, out uint pid);
-            if (pid != 0)
+            NativeMethods.GetWindowThreadProcessId(fgHwnd, out uint pid);
+            if (pid == Environment.ProcessId)
             {
-                using var proc = Process.GetProcessById((int)pid);
-                string name = proc.ProcessName.ToLowerInvariant();
-                return name.Contains("empire") || name.Contains("aoe") || name.Contains("age");
+                return IntPtr.Zero;
             }
         }
         catch { }
 
-        return false;
-    }
-
-    private static bool IsAoeTitle(string title)
-    {
-        if (string.IsNullOrWhiteSpace(title)) return false;
-        string t = title.ToLowerInvariant();
-        return t.Contains("empire") ||
-               t.Contains("age of empires") ||
-               t.Contains("aoe") ||
-               t.Contains("definitive edition");
+        return fgHwnd;
     }
 
     public void Dispose()

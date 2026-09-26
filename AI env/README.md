@@ -28,13 +28,15 @@ Dự án được viết theo cấu trúc tối giản và module hóa cao:
 
 ## 3. Chi tiết logic phím tắt & tính năng (Hotkey & Macro Specs)
 
-### 3.1. Kích hoạt & Trạng thái (F1 Toggle & Window Filter & Utility keys)
-* Phím **`F1`** bật/tắt toàn bộ macro. 
+### 3.1. Kích hoạt & Trạng thái (Tự động kích hoạt & Nhận diện bằng thanh tài nguyên)
+* **Tự động Bật (Enabled)**: Khi mở ứng dụng, Macro đã tự động ở trạng thái hoạt động (bỏ phím tắt F1).
+* **Nhận diện trạng thái InGame bằng thanh tài nguyên**:
+  * Khi quét và nhận diện được thanh tài nguyên (Gỗ, Thịt, Vàng, Đá): Macro chuyển sang trạng thái **Hoạt động (Active)** và tất cả map phím được kích hoạt.
+  * Nếu không đọc được thanh tài nguyên quá 1 giây (ra Menu, chuyển tab, kết thúc trận): Macro tự động chuyển sang **Tạm dừng (Suspended)** và cho phép phím đi qua nguyên bản.
 * Phím **`F12`**: Tạm dừng game (gửi phím pause F3 gốc).
 * Phím **`F3`**: Click nút Diplomacy (bảng ngoại giao). Tự động khóa chuột (ghim tại nút ngoại giao và chặn bấm chuột nhầm) trong quá trình hover/click, sau khi hoàn thành sẽ trả lại chuột và bù trừ chính xác quãng đường di chuyển vật lý của người dùng.
 * Phím **`F4`**: Mở timeline [`F10 -> Mũi tên xuống * 2 -> Enter`]. Tự động ghim chuột tại chỗ và chặn click trong thời gian gửi phím để tránh trôi trúng menu hoặc hủy menu game, sau đó trả chuột về vị trí đã bù trừ quãng đường di chuyển của người dùng.
-* Khi nhấn **`Enter`** (để chat trong game): macro tự động chuyển sang **Tạm dừng (Suspended)** để gõ chữ bình thường. Khi nhấn `Enter` hoặc `Esc` để thoát chat, macro tự động bật lại.
-* Khi Alt-Tab ra ngoài game (cửa sổ Age of Empires không active): macro chuyển sang **Tạm dừng (Unfocused)** và bypass toàn bộ phím tắt.
+* Khi nhấn **`Enter`** (để chat trong game): macro tự động chuyển sang **Tạm dừng (SuspendedChat)** để gõ chữ bình thường. Khi nhấn `Enter` hoặc `Esc` để thoát chat, macro tự động quay lại **Hoạt động (Active)**.
 
 ### 3.2. Khởi đầu nhanh (F2 giữ)
 * Khi macro đang bật, nhấn giữ phím **`F2`** để liên tục gửi lệnh xin dân `H -> C` (H: Chọn nhà chính, C: Xin dân).

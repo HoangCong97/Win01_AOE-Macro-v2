@@ -1,4 +1,5 @@
 using System.Data;
+using System.Drawing.Text;
 using AOEKeyboardMacroPro.Models;
 using AOEKeyboardMacroPro.Services;
 
@@ -14,6 +15,10 @@ public partial class MainForm : Form
     private readonly TimerOcrService _timerOcrService = new();
     private MiniHudForm? _hudForm;
     private volatile TimerValues _currentTimer = new();
+    private readonly ResourceValues _lastKnownResources = new();
+    private readonly PopValues _lastKnownPop = new();
+    private readonly TimerValues _lastKnownTimer = new();
+    private bool _isDataDimmed = true;
 
     public MainForm()
     {
@@ -24,6 +29,12 @@ public partial class MainForm : Form
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
         EnableDoubleBuffer(pnlOuterBorder);
         EnableDoubleBuffer(pnlKeyboardGrid);
+        EnableDoubleBuffer(pnlResourceRow);
+        pnlResourceRow.Paint += PnlResourceRow_Paint;
+        foreach (Control c in pnlResourceRow.Controls)
+        {
+            c.Visible = false;
+        }
 
         if (File.Exists("app_icon.ico"))
         {
@@ -48,6 +59,7 @@ public partial class MainForm : Form
         _controlEngine.LogRequested += AppendLog;
         _controlEngine.FarmTimerUpdated += OnFarmTimerUpdated;
         _ocrService.ResourcesUpdated += OnResourcesUpdated;
+        _ocrService.InGameStatusChanged += OnInGameStatusChangedFromResource;
         _popOcrService.PopUpdated += OnPopUpdated;
         _timerOcrService.TimerUpdated += OnTimerUpdated;
 
@@ -67,11 +79,14 @@ public partial class MainForm : Form
 
         var hudSettings = ConfigService.LoadSettings().Hud ?? new HudSettings();
         _hudForm = new MiniHudForm(hudSettings);
+        _hudForm.SetDimmed(true);
         if (hudSettings.Enabled)
         {
             _hudForm.Show();
         }
         UpdateHudButtonText();
+        ApplyResourceLabelColors();
+        RenderAllDataText();
     }
 
     private void RestoreWindowPosition()
@@ -276,6 +291,10 @@ public partial class MainForm : Form
         {
             var hudSettings = ConfigService.LoadSettings().Hud ?? new HudSettings();
             _hudForm = new MiniHudForm(hudSettings);
+            _hudForm.SetDimmed(_isDataDimmed);
+            _hudForm.UpdateResources(_lastKnownResources);
+            _hudForm.UpdatePop(_lastKnownPop);
+            _hudForm.UpdateTimer(_lastKnownTimer);
         }
 
         if (_hudForm.Visible)
@@ -390,18 +409,7 @@ public partial class MainForm : Form
         pnlResourceRow.BackColor = resPanelBg;
         pnlResourceRow.BorderStyle = BorderStyle.FixedSingle;
 
-        lblResourceWood.ForeColor = _isDarkMode ? Color.FromArgb(70, 210, 130) : Color.FromArgb(46, 125, 50);
-        lblResourceFood.ForeColor = _isDarkMode ? Color.FromArgb(255, 95, 95) : Color.FromArgb(198, 40, 40);
-        lblResourceGold.ForeColor = _isDarkMode ? Color.FromArgb(255, 215, 60) : Color.FromArgb(230, 124, 115);
-        lblResourceStone.ForeColor = _isDarkMode ? Color.FromArgb(100, 210, 255) : Color.FromArgb(25, 118, 210);
-
-        Color sepColor = _isDarkMode ? Color.Gray : Color.LightGray;
-        lblResSep1.ForeColor = sepColor;
-        lblResSep2.ForeColor = sepColor;
-        lblResSep3.ForeColor = sepColor;
-        lblResSep4.ForeColor = sepColor;
-        lblResourcePop.ForeColor = _isDarkMode ? Color.FromArgb(235, 130, 255) : Color.FromArgb(142, 36, 170);
-        lblResourceRate.ForeColor = _isDarkMode ? Color.FromArgb(100, 210, 255) : Color.FromArgb(0, 130, 220);
+        ApplyResourceLabelColors();
 
         foreach (Control ctrl in pnlKeyboardGrid.Controls)
         {
@@ -430,9 +438,143 @@ public partial class MainForm : Form
         _popOcrService.LoadTemplates();
     }
 
+    private void OnInGameStatusChangedFromResource(bool inGame)
+    {
+        _controlEngine.UpdateInGameStatus(inGame);
+
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(new Action<bool>(UpdateInGameUI), inGame);
+            }
+            catch { }
+        }
+        else
+        {
+            UpdateInGameUI(inGame);
+        }
+    }
+
+    private void UpdateInGameUI(bool inGame)
+    {
+        _isDataDimmed = !inGame;
+        if (!inGame)
+        {
+            _currentTimer = new TimerValues();
+        }
+        _hudForm?.SetDimmed(_isDataDimmed);
+        ApplyResourceLabelColors();
+        RenderAllDataText();
+    }
+
+    private void ApplyResourceLabelColors()
+    {
+        pnlResourceRow.Invalidate();
+    }
+
+    private void RenderAllDataText()
+    {
+        RenderResourceText();
+        RenderPopText();
+        RenderTimerText();
+    }
+
+    private void RenderResourceText()
+    {
+        lblResourceWood.Text = $"🪵 Gỗ: {ResourceValues.Format(_lastKnownResources.Wood)}";
+        lblResourceFood.Text = $"🥩 Thịt: {ResourceValues.Format(_lastKnownResources.Food)}";
+        lblResourceGold.Text = $"🪙 Vàng: {ResourceValues.Format(_lastKnownResources.Gold)}";
+        lblResourceStone.Text = $"🪨 Đá: {ResourceValues.Format(_lastKnownResources.Stone)}";
+        pnlResourceRow.Invalidate();
+    }
+
+    private void RenderPopText()
+    {
+        lblResourcePop.Text = $"👥 POP: {(_lastKnownPop.IsValid ? $"{_lastKnownPop.CurrentPop}/{_lastKnownPop.MaxPop}" : (_lastKnownPop.CurrentPop.HasValue ? $"{_lastKnownPop.CurrentPop}/--" : "--/--"))}";
+        pnlResourceRow.Invalidate();
+    }
+
+    private void RenderTimerText()
+    {
+        lblResourceRate.Text = $"⏱️ {(_lastKnownTimer.IsValid ? _lastKnownTimer.RawText : "--:--")}";
+        pnlResourceRow.Invalidate();
+    }
+
+    private void PnlResourceRow_Paint(object? sender, PaintEventArgs e)
+    {
+        Graphics g = e.Graphics;
+        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+        Color woodColor = _isDarkMode ? Color.FromArgb(70, 210, 130) : Color.FromArgb(46, 125, 50);
+        Color foodColor = _isDarkMode ? Color.FromArgb(255, 95, 95) : Color.FromArgb(198, 40, 40);
+        Color goldColor = _isDarkMode ? Color.FromArgb(255, 215, 60) : Color.FromArgb(210, 115, 25);
+        Color stoneColor = _isDarkMode ? Color.FromArgb(100, 210, 255) : Color.FromArgb(25, 118, 210);
+        Color popColor = _isDarkMode ? Color.FromArgb(235, 130, 255) : Color.FromArgb(142, 36, 170);
+        Color timerColor = _isDarkMode ? Color.FromArgb(100, 210, 255) : Color.FromArgb(0, 130, 220);
+        Color sepColor = _isDarkMode ? Color.FromArgb(80, 85, 95) : Color.LightGray;
+        Color dimmedValColor = _isDarkMode ? Color.FromArgb(120, 125, 135) : Color.FromArgb(145, 150, 158);
+
+        using var font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        using var sepFont = new Font("Segoe UI", 9F, FontStyle.Regular);
+
+        int y = 5;
+
+        void DrawItemAt(int startX, string title, string val, Color itemColor)
+        {
+            // 1. Đại lượng (luôn giữ màu sắc đặc trưng, KHÔNG bị làm mờ)
+            TextRenderer.DrawText(g, title, font, new Point(startX, y), itemColor, TextFormatFlags.NoPadding);
+            Size titleSz = TextRenderer.MeasureText(g, title, font, Size.Empty, TextFormatFlags.NoPadding);
+
+            // 2. Giá trị (chỉ giá trị bị làm mờ khi ngoài trận / timeout 1s)
+            Color valColor = _isDataDimmed ? dimmedValColor : itemColor;
+            TextRenderer.DrawText(g, val, font, new Point(startX + titleSz.Width, y), valColor, TextFormatFlags.NoPadding);
+        }
+
+        void DrawSepAt(int sepX)
+        {
+            TextRenderer.DrawText(g, "|", sepFont, new Point(sepX, y + 1), sepColor, TextFormatFlags.NoPadding);
+        }
+
+        // 1. Gỗ (X = 10, Phân cách = 120)
+        DrawItemAt(10, "🪵 Gỗ: ", ResourceValues.Format(_lastKnownResources.Wood), woodColor);
+        DrawSepAt(120);
+
+        // 2. Thịt (X = 135, Phân cách = 250)
+        DrawItemAt(135, "🥩 Thịt: ", ResourceValues.Format(_lastKnownResources.Food), foodColor);
+        DrawSepAt(250);
+
+        // 3. Vàng (X = 265, Phân cách = 385)
+        DrawItemAt(265, "🪙 Vàng: ", ResourceValues.Format(_lastKnownResources.Gold), goldColor);
+        DrawSepAt(385);
+
+        // 4. Đá (X = 400, Phân cách = 515)
+        DrawItemAt(400, "🪨 Đá: ", ResourceValues.Format(_lastKnownResources.Stone), stoneColor);
+        DrawSepAt(515);
+
+        // 5. POP (X = 530)
+        string popVal = _lastKnownPop.IsValid
+            ? $"{_lastKnownPop.CurrentPop}/{_lastKnownPop.MaxPop}"
+            : (_lastKnownPop.CurrentPop.HasValue ? $"{_lastKnownPop.CurrentPop}/--" : "--/--");
+        DrawItemAt(530, "👥 POP: ", popVal, popColor);
+
+        // 6. Timer (Vẽ sát mép phải)
+        string timerTitle = "⏱️ ";
+        string timerVal = _lastKnownTimer.IsValid ? _lastKnownTimer.RawText! : "--:--";
+        Size timerTitleSz = TextRenderer.MeasureText(g, timerTitle, font, Size.Empty, TextFormatFlags.NoPadding);
+        Size timerValSz = TextRenderer.MeasureText(g, timerVal, font, Size.Empty, TextFormatFlags.NoPadding);
+        int timerTotalW = timerTitleSz.Width + timerValSz.Width;
+        int timerX = pnlResourceRow.Width - timerTotalW - 14;
+
+        TextRenderer.DrawText(g, timerTitle, font, new Point(timerX, y), timerColor, TextFormatFlags.NoPadding);
+        Color timerValColor = _isDataDimmed ? dimmedValColor : timerColor;
+        TextRenderer.DrawText(g, timerVal, font, new Point(timerX + timerTitleSz.Width, y), timerValColor, TextFormatFlags.NoPadding);
+    }
+
     private void OnResourcesUpdated(ResourceValues res)
     {
-        _controlEngine.TryTriggerAutoFastStart(res, _currentTimer);
+        _controlEngine.TryTriggerAutoFastStart(res, _timerOcrService.CurrentRealtimeTimer);
 
         if (IsDisposed) return;
 
@@ -452,11 +594,15 @@ public partial class MainForm : Form
 
     private void UpdateResourceUI(ResourceValues res)
     {
-        lblResourceWood.Text = $"🪵 Gỗ: {(res.Wood.HasValue ? res.Wood.Value.ToString("N0") : "--")}";
-        lblResourceFood.Text = $"🥩 Thịt: {(res.Food.HasValue ? res.Food.Value.ToString("N0") : "--")}";
-        lblResourceGold.Text = $"🪙 Vàng: {(res.Gold.HasValue ? res.Gold.Value.ToString("N0") : "--")}";
-        lblResourceStone.Text = $"🪨 Đá: {(res.Stone.HasValue ? res.Stone.Value.ToString("N0") : "--")}";
+        if (res != null && !res.IsEmpty)
+        {
+            if (res.Wood.HasValue) _lastKnownResources.Wood = res.Wood;
+            if (res.Food.HasValue) _lastKnownResources.Food = res.Food;
+            if (res.Gold.HasValue) _lastKnownResources.Gold = res.Gold;
+            if (res.Stone.HasValue) _lastKnownResources.Stone = res.Stone;
+        }
 
+        RenderResourceText();
         _hudForm?.UpdateResources(res);
     }
 
@@ -480,8 +626,13 @@ public partial class MainForm : Form
 
     private void UpdatePopUI(PopValues pop)
     {
-        lblResourcePop.Text = $"👥 POP: {(pop.IsValid ? $"{pop.CurrentPop}/{pop.MaxPop}" : (pop.CurrentPop.HasValue ? $"{pop.CurrentPop}/--" : "--/--"))}";
+        if (pop != null && (pop.IsValid || pop.CurrentPop.HasValue))
+        {
+            if (pop.CurrentPop.HasValue) _lastKnownPop.CurrentPop = pop.CurrentPop;
+            if (pop.MaxPop.HasValue) _lastKnownPop.MaxPop = pop.MaxPop;
+        }
 
+        RenderPopText();
         _hudForm?.UpdatePop(pop);
     }
 
@@ -507,7 +658,12 @@ public partial class MainForm : Form
 
     private void UpdateTimerUI(TimerValues timer)
     {
-        lblResourceRate.Text = $"⏱️ {(timer.IsValid ? timer.RawText : "--:--")}";
+        if (timer != null && timer.IsValid)
+        {
+            _lastKnownTimer.RawText = timer.RawText;
+        }
+
+        RenderTimerText();
         _hudForm?.UpdateTimer(timer);
     }
 
@@ -594,33 +750,33 @@ public partial class MainForm : Form
             case MacroState.Disabled:
                 lblStatusValue.Text = "Tắt";
                 lblStatusValue.ForeColor = Color.FromArgb(127, 140, 141); // Gray
-                btnToggleMacro.Text = "Bật Macro (F1)";
+                btnToggleMacro.Text = "Bật Macro";
                 break;
 
             case MacroState.Active:
                 lblStatusValue.Text = "Hoạt động";
                 lblStatusValue.ForeColor = Color.FromArgb(39, 174, 96); // Green
-                btnToggleMacro.Text = "Tắt Macro (F1)";
+                btnToggleMacro.Text = "Tắt Macro";
                 break;
 
             case MacroState.SuspendedChat:
                 lblStatusValue.Text = "Tạm dừng (Chat)";
                 lblStatusValue.ForeColor = Color.FromArgb(230, 126, 34); // Orange
-                btnToggleMacro.Text = "Tắt Macro (F1)";
+                btnToggleMacro.Text = "Tắt Macro";
                 break;
 
             case MacroState.SuspendedOutOfGame:
             default:
                 lblStatusValue.Text = "Tạm dừng (Ngoài game)";
                 lblStatusValue.ForeColor = Color.FromArgb(231, 76, 60); // Red
-                btnToggleMacro.Text = "Tắt Macro (F1)";
+                btnToggleMacro.Text = "Tắt Macro";
                 break;
         }
     }
 
     private void BtnToggleMacro_Click(object? sender, EventArgs e)
     {
-        _controlEngine.ToggleF1();
+        _controlEngine.ToggleEnable();
     }
 
     private void MainForm_KeyDown(object? sender, KeyEventArgs e)

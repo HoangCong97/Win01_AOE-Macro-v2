@@ -18,27 +18,36 @@
 
 ## 3. Controll
 ** Chức năng: điều khiển**
-- Khởi động Macro bằng (F1): [Enabled]
-- Tạm dừng Macro bằng (F1): [Suspended]
-- Khi đang [Enabled], nếu người dùng chuyển sang ứng dụng khác, thì Macro sẽ tự động Tạm dừng (Suspended), và tự động Bật lại (Enabled) khi người dùng quay lại trò chơi
-- Khi đang [Enabled], nếu người dùng nhấn Enter để chat, thì Macro sẽ tự động Tạm dừng (Suspended). Khi người dùng nhấn Enter hoặc Esc để thoát khung chat, Macro sẽ tự động Bật lại (Enabled).
-- Khi đang [Enabled], vô hiệu hóa công cụ gõ tiếng việt
+- Bỏ chức năng (F1): Bật app lên là đã tự động hoạt động (Enabled), không cần nhấn phím kích hoạt.
+- Nhận diện trạng thái InGame bằng thanh tài nguyên (thay vì tên cửa sổ):
+  + Khi quét và đọc được thanh tài nguyên (Wood/Food/Gold/Stone): Tự động chuyển sang trạng thái Hoạt động [Active/Enabled].
+  + Nếu thanh tài nguyên không đọc được quá 1s (chuyển sang ứng dụng khác, ra ngoài Menu, kết thúc trận đấu): Tự động chuyển sang Tạm dừng [Suspended].
+  + Khi quay lại trận đấu và đọc lại được thanh tài nguyên: Tự động Bật lại [Active/Enabled].
+- Cơ chế lưu giá trị cuối cùng và làm mờ (Dimmed State):
+  + Thay vì hiện `--` khi không đọc được thông số, hệ thống luôn lưu giữ giá trị hợp lệ cuối cùng đã đọc được và tiếp tục hiển thị trên cả Form chính và Mini HUD.
+  + Sau 1 giây không đọc được thanh tài nguyên, toàn bộ các giá trị con số: Tài nguyên (Gỗ, Thịt, Vàng, Đá), Đồng hồ (Timer) và Dân số (POP) sẽ đồng thời chuyển sang trạng thái làm mờ (Dimmed).
+  + **Quy tắc làm mờ**: Không làm mờ đại lượng (các nhãn icon/tên như "🪵 Gỗ: ", "🥩 Thịt: ", "🪙 Vàng: ", "🪨 Đá: ", "👥 POP: ", "⏱️ Giờ: " luôn giữ nguyên màu sắc đặc trưng, rõ nét), **chỉ làm mờ duy nhất giá trị con số** của chúng.
+  + Khi ở trạng thái làm mờ: Tuyệt đối không phát bất kỳ cảnh báo nào (tắt nhấp nháy viền đỏ Mini HUD, tắt nhấp nháy cảnh báo đè dân POP, tắt tô đậm màu sắc tài nguyên L1-L3, và tắt còi chuông âm thanh cảnh báo).
+  + Khi nhận diện lại được tài nguyên in-game: Tất cả giá trị con số hiển thị trở lại màu sắc rõ nét bình thường và mở lại các cảnh báo theo ngưỡng.
+- Tất cả các map phím sẽ hoạt động khi ở trạng thái InGame [Active]. Khi ở ngoài InGame [Suspended], phím hoàn toàn không bị chặn, hoạt động nguyên bản của hệ thống.
+- Khi đang InGame [Active], nếu người dùng nhấn Enter để chat, thì Macro sẽ tự động Tạm dừng (SuspendedChat) để gõ chữ tự do. Khi người dùng nhấn Enter (gửi chat) hoặc Esc (hủy chat) để thoát khung chat, Macro sẽ tự động Bật lại [Active/Enabled].
+- Khi đang [Active], vô hiệu hóa phím Windows để tránh bấm nhầm văng game, đồng thời vô hiệu hóa công cụ gõ tiếng Việt.
 
 **Chức năng: Khởi đầu nhanh**
-- **Thủ công (F2-F2)**: Liên tục [H -> C] cho tới khi nhả F2, sau khi nhả F2 thì [F4-F11]. *Nếu macro đang ở trạng thái Tắt (F1 Disabled), bấm F2 sẽ tự động bật Macro lên trạng thái Hoạt động (Active) và thực thi ngay lập tức*.
+- **Thủ công (F2-F2)**: Liên tục [H -> C] cho tới khi nhả F2, sau khi nhả F2 thì [F4-F11].
 - **Tự động nhận diện (Auto Fast Start)**:
-  - **Điều kiện kích hoạt**: Khi Macro đang ở trạng thái Bật (`Active`), game đang trong trận (`IsInGame`), và OCR đọc được chính xác giá trị tài nguyên khởi đầu trận đấu là `Gỗ: 200, Thịt: 200` (200 Wood, 200 Food).
-  - *Lưu ý trạng thái Tắt*: Khi Macro đang Tắt (F1 Disabled), toàn bộ dịch vụ quét OCR đều dừng hoàn toàn (0% CPU) nên không tự đọc được tài nguyên để tự bật. Người chơi chỉ cần Bật F1 trước trận đấu (hoặc ấn F2 đầu trận để vừa xin dân vừa tự bật F1).
+  - **Điều kiện kích hoạt**: Khi game đang trong trận (`IsInGame` - đọc được thanh tài nguyên), và OCR đọc được chính xác giá trị tài nguyên khởi đầu trận đấu là `Gỗ: 200, Thịt: 200` (200 Wood, 200 Food).
+  - *Cơ chế chạy tự động*: Vì Macro đã bật sẵn khi khởi động app, dịch vụ OCR quét liên tục và tự động kích hoạt ngay khi vào trận mà người chơi không cần bấm F1 hay thao tác gì thêm.
   - **Thao tác thực thi**:
     1. Ấn phím: [F4 > F11].
     2. Sau đó thực hiện [H > C] nhanh 8 lần liên tiếp.
     3. Trong suốt thời gian thực thi chuỗi này: Vô hiệu hóa toàn bộ click chuột trái và chuột phải vật lý của người dùng để tránh thao tác nhầm / lệch focus.
     4. Ngay khi thực hiện xong 8 lần [H > C]: Tự động mở lại click chuột trái, phải và reset toàn bộ các bộ đếm / chuỗi phím về trạng thái sơ khai ban đầu.
   - **Cơ chế kiểm soát an toàn & chống spam**:
-    - **Vô hiệu hóa khi đã có Timer**: Nếu đã nhận diện được đồng hồ game (`timer.IsValid` - tức là game đã chạy qua giai đoạn đầu hoặc đã nhấn F11 hiển thị timer), chức năng tự động khởi đầu nhanh sẽ bị tắt hoàn toàn.
+    - **Kiểm soát Timer**: Chỉ vô hiệu hóa khi đồng hồ game thực tế đang hiển thị trên màn hình và đã qua giai đoạn đầu (> 5 giây). Nếu chưa có timer trên màn hình (chưa bấm F11) hoặc timer đang ở thời điểm đầu trận (00:00 - 00:05), chức năng vẫn kích hoạt bình thường. Timer lưu trữ từ ván trước tuyệt đối không ảnh hưởng đến ván đấu mới.
     - **Kiểm soát trigger đè**: Không cho phép kích hoạt lặp nếu một chuỗi khởi đầu nhanh đang trong quá trình thực thi.
     - **Kiểm soát trigger lặp lại**: Chỉ cho phép chạy đúng 1 lần trong mỗi ván đấu. Chỉ kích hoạt lại nếu đã từng quan sát thấy tài nguyên thay đổi khác 200 Gỗ / 200 Thực (restart ván mới) hoặc thoát game vào lại.
-    - **Giới hạn thời gian tối thiểu**: Khoảng cách tối thiểu giữa 2 lần kích hoạt là 25 giây.
+    - **Giới hạn thời gian tối thiểu**: Khoảng cách tối thiểu giữa 2 lần kích hoạt là 5 giây.
 
 **Chức năng: Mở bảng ngoại giao**
 (F3): Click nút Diplomacy (bảng ngoại giao) - Khóa chuột và ghim tại nút trong thời gian xử lý, sau khi xong trả chuột và bù vào chuyển động đã mất của người dùng.

@@ -158,7 +158,12 @@ public class ControlEngine : IDisposable
         MouseLockManager.Initialize();
         StartHooks();
         _gameWatcher.Start();
-        SetState(MacroState.Disabled, "Khởi tạo hệ thống: Trạng thái [Tắt] (Bấm F1 để bật Macro).");
+        SetState(MacroState.SuspendedOutOfGame, "Khởi tạo hệ thống: Macro đã BẬT -> Trạng thái: [Tạm dừng (Chờ vào trận)]");
+    }
+
+    public void UpdateInGameStatus(bool inGame)
+    {
+        _gameWatcher.SetInGameStatus(inGame);
     }
 
     public void Stop()
@@ -185,7 +190,7 @@ public class ControlEngine : IDisposable
         StopHooks();
     }
 
-    public void ToggleF1()
+    public void ToggleEnable()
     {
         if (_currentState == MacroState.Disabled)
         {
@@ -193,12 +198,12 @@ public class ControlEngine : IDisposable
             PromoteHooks();
             if (_gameWatcher.IsInGame)
             {
-                SetState(MacroState.Active, "Macro BẬT (F1) -> Trạng thái: [Hoạt động]");
+                SetState(MacroState.Active, "Macro BẬT -> Trạng thái: [Hoạt động]");
             }
             else
             {
                 _savedStateBeforeUnfocus = MacroState.Active;
-                SetState(MacroState.SuspendedOutOfGame, "Macro BẬT (F1) -> Trạng thái: [Tạm dừng (Ngoài game)]");
+                SetState(MacroState.SuspendedOutOfGame, "Macro BẬT -> Trạng thái: [Tạm dừng (Chờ vào trận)]");
             }
         }
         else
@@ -207,9 +212,11 @@ public class ControlEngine : IDisposable
             _hasAutoStartedForCurrentGame = false;
             _hasObservedNonInitialResources = false;
             MidiPlayer.PlayToggleOffSound();
-            SetState(MacroState.Disabled, "Macro TẮT (F1) -> Trạng thái: [Vô hiệu hóa]");
+            SetState(MacroState.Disabled, "Macro TẮT -> Trạng thái: [Vô hiệu hóa]");
         }
     }
+
+    public void ToggleF1() => ToggleEnable();
 
     private void OnMouseClick()
     {
@@ -448,10 +455,14 @@ public class ControlEngine : IDisposable
             InputSimulator.ReleaseAltKeysHardware();
             ExitFlagMode();
 
+            // Tắt còi báo ruộng và dừng mọi âm thanh cảnh báo khi ra ngoài game/bị làm mờ
+            _farmTimerManager.StopAllTimersAndAlarms();
+            MidiPlayer.StopAlarmSound();
+
             if (_currentState == MacroState.Active || _currentState == MacroState.SuspendedChat)
             {
                 _savedStateBeforeUnfocus = _currentState;
-                SetState(MacroState.SuspendedOutOfGame, "Game mất focus (Ra ngoài game). Tạm dừng macro.");
+                SetState(MacroState.SuspendedOutOfGame, "Không nhận diện được thanh tài nguyên quá 1s (Ngoài game/Menu). Tạm dừng macro.");
             }
         }
         else
@@ -460,7 +471,7 @@ public class ControlEngine : IDisposable
 
             if (_currentState == MacroState.SuspendedOutOfGame)
             {
-                SetState(_savedStateBeforeUnfocus, $"Quay lại game -> Tiếp tục: {_savedStateBeforeUnfocus.ToDisplayName()}");
+                SetState(_savedStateBeforeUnfocus, $"Đã nhận diện thanh tài nguyên (Vào game) -> Tiếp tục: {_savedStateBeforeUnfocus.ToDisplayName()}");
             }
         }
     }
@@ -501,35 +512,22 @@ public class ControlEngine : IDisposable
     {
         Keys key = (Keys)vkCode;
 
-        // 1. Phím F1 Bật/Tắt luôn được xử lý và tiêu thụ
-        if (key == Keys.F1 && isKeyDown)
-        {
-            ToggleF1();
-            return true;
-        }
-
-        // Nếu Macro chưa Bật mà nhấn F2 -> Tự động bật Macro lên trước khi thực hiện Khởi đầu nhanh
-        if (key == Keys.F2 && isKeyDown && _currentState == MacroState.Disabled)
-        {
-            ToggleF1();
-        }
-
         // Nếu Macro ở trạng thái Tắt (Disabled) -> Cho phím đi qua hoàn toàn
         if (_currentState == MacroState.Disabled)
         {
             return false;
         }
 
-        // Khóa hoàn toàn chức năng phím Windows khi Macro đang Bật
-        if (key == Keys.LWin || key == Keys.RWin)
-        {
-            return true;
-        }
-
-        // Phải ở trong cửa sổ Game để thực thi các macro game
+        // Phải ở trong game (nhận diện được thanh tài nguyên) để thực thi các macro game
         if (!_gameWatcher.IsInGame)
         {
             return false;
+        }
+
+        // Khóa hoàn toàn chức năng phím Windows khi đang InGame
+        if (key == Keys.LWin || key == Keys.RWin)
+        {
+            return true;
         }
 
         // 2. Chat toggles (Enter & Escape)
@@ -1223,7 +1221,7 @@ public class ControlEngine : IDisposable
 
         return key switch
         {
-            Keys.F1 or Keys.F2 or Keys.F3 or Keys.F4 or Keys.F12 or Keys.Oemtilde or Keys.Q or Keys.W or
+            Keys.F2 or Keys.F3 or Keys.F4 or Keys.F12 or Keys.Oemtilde or Keys.Q or Keys.W or
             Keys.E or Keys.R or Keys.T or Keys.V or Keys.F or Keys.G or Keys.B or Keys.N or
             Keys.A or Keys.S or Keys.Z or Keys.X or Keys.D or Keys.C or
             Keys.NumPad1 or Keys.NumPad2 or Keys.NumPad3 or Keys.NumPad4 or Keys.NumPad5 => true,
@@ -1247,8 +1245,9 @@ public class ControlEngine : IDisposable
             return false;
         }
 
-        // 1. Disable khi đã đọc được timer (timer.IsValid có nghĩa là đồng hồ game đã xuất hiện hoặc đang trong trận)
-        if (timer != null && timer.IsValid)
+        // 1. Disable khi game đã diễn ra qua giai đoạn đầu (> 5 giây).
+        // Nếu timer chưa xuất hiện (chưa ấn F11) hoặc timer đang ở thời điểm đầu trận (00:00 - 00:05) -> Cho phép chạy AutoFastStart!
+        if (timer != null && timer.IsValid && IsPastEarlyGame(timer))
         {
             return false;
         }
@@ -1278,10 +1277,10 @@ public class ControlEngine : IDisposable
 
         // 5. Kiểm soát trigger lặp lại:
         // Nếu đã từng chạy cho trận này, chỉ cho phép chạy lại nếu tài nguyên đã từng thay đổi khác 200 Gỗ / 200 Thực (restart trận mới)
-        // và khoảng cách thời gian tối thiểu >= 25 giây
+        // và khoảng cách thời gian tối thiểu >= 5 giây
         if (_hasAutoStartedForCurrentGame)
         {
-            if (_hasObservedNonInitialResources && (DateTime.UtcNow - _lastAutoStartTime).TotalSeconds >= 25)
+            if (_hasObservedNonInitialResources && (DateTime.UtcNow - _lastAutoStartTime).TotalSeconds >= 5)
             {
                 _hasAutoStartedForCurrentGame = false;
             }
@@ -1291,8 +1290,8 @@ public class ControlEngine : IDisposable
             }
         }
 
-        // 6. Giới hạn thời gian tối thiểu giữa các lần kích hoạt
-        if ((DateTime.UtcNow - _lastAutoStartTime).TotalSeconds < 25)
+        // 6. Giới hạn thời gian tối thiểu giữa các lần kích hoạt (5 giây)
+        if ((DateTime.UtcNow - _lastAutoStartTime).TotalSeconds < 5)
         {
             return false;
         }
@@ -1345,6 +1344,32 @@ public class ControlEngine : IDisposable
                 Log("[Khởi đầu nhanh tự động] Hoàn tất 8x (H > C) -> Đã mở lại chuột và reset tất cả bộ đếm về trạng thái sơ khai.", Color.DarkGreen);
             }
         });
+    }
+
+    private static bool IsPastEarlyGame(TimerValues timer)
+    {
+        if (string.IsNullOrWhiteSpace(timer.RawText)) return false;
+        string raw = timer.RawText.Trim();
+
+        // 00:00, 0:00, 00:01, 00:02, 00:03, 00:04, 00:05 -> Vẫn là thời điểm đầu trận đấu
+        if (raw == "00:00" || raw == "0:00" || raw == "00:01" || raw == "0:01" ||
+            raw == "00:02" || raw == "0:02" || raw == "00:03" || raw == "0:03" ||
+            raw == "00:04" || raw == "0:04" || raw == "00:05" || raw == "0:05")
+        {
+            return false;
+        }
+
+        string[] parts = raw.Split(':');
+        if (parts.Length == 2 && int.TryParse(parts[0], out int min) && int.TryParse(parts[1], out int sec))
+        {
+            return (min * 60 + sec) > 5;
+        }
+        else if (parts.Length == 3 && int.TryParse(parts[0], out int h) && int.TryParse(parts[1], out int m) && int.TryParse(parts[2], out int s))
+        {
+            return (h * 3600 + m * 60 + s) > 5;
+        }
+
+        return true;
     }
 
     public void ResetAllCountersToInitial()

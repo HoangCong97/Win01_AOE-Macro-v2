@@ -18,10 +18,40 @@ public class MiniHudForm : Form
     private bool _shouldBlink = false;
     private bool _blinkPhase = false;
     private bool _isMaxPop = false;
+    private bool _isDimmed = true;
 
     private bool _isDragging = false;
     private Point _dragStart;
     private Rectangle _closeBtnRect = new(128, 9, 16, 16);
+
+    public bool IsDimmed => _isDimmed;
+
+    public void SetDimmed(bool dimmed)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action<bool>(SetDimmed), dimmed);
+            return;
+        }
+
+        if (_isDimmed != dimmed)
+        {
+            _isDimmed = dimmed;
+            if (_isDimmed)
+            {
+                // Khi bị làm mờ: TẮT CẢNH BÁO HOÀN TOÀN!
+                _shouldBlink = false;
+                _blinkPhase = false;
+                _popBlinkTimer.Stop();
+            }
+            else
+            {
+                CheckPopBlinkCondition();
+            }
+            Invalidate();
+        }
+    }
 
     public MiniHudForm(HudSettings? settings = null)
     {
@@ -154,47 +184,75 @@ public class MiniHudForm : Form
         ContextMenuStrip = _contextMenu;
     }
 
-    public void UpdateResources(ResourceValues res)
+    public void UpdateResources(ResourceValues? res)
     {
         if (IsDisposed) return;
         if (InvokeRequired)
         {
-            BeginInvoke(new Action<ResourceValues>(UpdateResources), res);
+            BeginInvoke(new Action<ResourceValues?>(UpdateResources), res);
             return;
         }
 
-        _resourceValues = res;
+        if (res != null && !res.IsEmpty)
+        {
+            if (res.Wood.HasValue) _resourceValues.Wood = res.Wood;
+            if (res.Food.HasValue) _resourceValues.Food = res.Food;
+            if (res.Gold.HasValue) _resourceValues.Gold = res.Gold;
+            if (res.Stone.HasValue) _resourceValues.Stone = res.Stone;
+        }
         Invalidate();
     }
 
-    public void UpdateTimer(TimerValues timer)
+    public void UpdateTimer(TimerValues? timer)
     {
         if (IsDisposed) return;
         if (InvokeRequired)
         {
-            BeginInvoke(new Action<TimerValues>(UpdateTimer), timer);
+            BeginInvoke(new Action<TimerValues?>(UpdateTimer), timer);
             return;
         }
 
-        _timerValues = timer;
+        if (timer != null && timer.IsValid)
+        {
+            _timerValues.RawText = timer.RawText;
+        }
         Invalidate();
     }
 
-    public void UpdatePop(PopValues pop)
+    public void UpdatePop(PopValues? pop)
     {
         if (IsDisposed) return;
         if (InvokeRequired)
         {
-            BeginInvoke(new Action<PopValues>(UpdatePop), pop);
+            BeginInvoke(new Action<PopValues?>(UpdatePop), pop);
             return;
         }
 
-        _popValues = pop;
-
-        if (pop.IsValid)
+        if (pop != null && (pop.IsValid || pop.CurrentPop.HasValue))
         {
-            int x = pop.CurrentPop!.Value;
-            int y = pop.MaxPop!.Value;
+            if (pop.CurrentPop.HasValue) _popValues.CurrentPop = pop.CurrentPop;
+            if (pop.MaxPop.HasValue) _popValues.MaxPop = pop.MaxPop;
+        }
+
+        CheckPopBlinkCondition();
+        Invalidate();
+    }
+
+    private void CheckPopBlinkCondition()
+    {
+        if (_isDimmed)
+        {
+            _isMaxPop = false;
+            _shouldBlink = false;
+            _blinkPhase = false;
+            _popBlinkTimer.Stop();
+            return;
+        }
+
+        if (_popValues.IsValid)
+        {
+            int x = _popValues.CurrentPop!.Value;
+            int y = _popValues.MaxPop!.Value;
             int diff = y - x;
 
             if (x >= 200)
@@ -210,22 +268,18 @@ public class MiniHudForm : Form
                 // Các khoảng phân tầng độc lập, tuyệt đối không để khoảng sau đè lên khoảng trước
                 if (x < 26)
                 {
-                    // Khi POP < 26 đơn vị, thì cứ POP x/y nếu y-x <= 2 thì nhấp nháy POP
                     _shouldBlink = (diff <= 2);
                 }
                 else if (x < 50)
                 {
-                    // Khi POP < 50, nếu y-x <= 4 thì nhấp nháy POP
                     _shouldBlink = (diff <= 4);
                 }
                 else if (x < 100)
                 {
-                    // Khi POP < 100, nếu y-x <= 8 thì nhấp nháy POP
                     _shouldBlink = (diff <= 8);
                 }
                 else // 100 <= x < 200
                 {
-                    // Khi POP < 200, nếu y-x <= 16 thì nhấp nháy POP
                     _shouldBlink = (diff <= 16);
                 }
             }
@@ -251,8 +305,6 @@ public class MiniHudForm : Form
             _blinkPhase = false;
             _popBlinkTimer.Stop();
         }
-
-        Invalidate();
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -308,7 +360,11 @@ public class MiniHudForm : Form
 
         // Viền dày 8px bao quanh Mini HUD (nhấp nháy đồng bộ khi có cảnh báo POP)
         Color hudBorderColor;
-        if (_shouldBlink)
+        if (_isDimmed)
+        {
+            hudBorderColor = Color.FromArgb(42, 45, 55); // Viền mờ tối khi dimmed, không nhấp nháy
+        }
+        else if (_shouldBlink)
         {
             hudBorderColor = _blinkPhase ? Color.FromArgb(245, 40, 60) : Color.FromArgb(65, 25, 35);
         }
@@ -407,9 +463,22 @@ public class MiniHudForm : Form
     {
         string textVal = _timerValues.IsValid ? _timerValues.RawText! : "--:--";
 
-        Color bgColor = Color.FromArgb(20, 26, 34);
-        Color borderColor = Color.FromArgb(35, 52, 70);
-        Color textColor = Color.FromArgb(100, 205, 255);
+        Color bgColor;
+        Color borderColor;
+        Color textColor;
+
+        if (_isDimmed)
+        {
+            bgColor = Color.FromArgb(18, 20, 26);
+            borderColor = Color.FromArgb(28, 32, 40);
+            textColor = Color.FromArgb(100, 115, 125);
+        }
+        else
+        {
+            bgColor = Color.FromArgb(20, 26, 34);
+            borderColor = Color.FromArgb(35, 52, 70);
+            textColor = Color.FromArgb(100, 205, 255);
+        }
 
         using (GraphicsPath path = CreateRoundedRectangle(rect, 5))
         {
@@ -419,20 +488,22 @@ public class MiniHudForm : Form
             g.DrawPath(p, path);
         }
 
-        // Tên mục bên trái
+        // Tên mục bên trái (ĐẠI LƯỢNG) - Luôn giữ màu xanh lam đặc trưng, không bị làm mờ
+        Color labelColor = Color.FromArgb(100, 205, 255);
         using (var labelFont = new Font("Segoe UI", 9f, FontStyle.Regular))
         {
             TextRenderer.DrawText(g, "⏱️ Giờ", labelFont,
                 new Rectangle(rect.X + 6, rect.Y, 52, rect.Height),
-                textColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+                labelColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
         }
 
-        // Giá trị thời gian bên phải
+        // Giá trị thời gian bên phải (GIÁ TRỊ) - Chỉ giá trị bị làm mờ
+        Color valColor = _isDimmed ? Color.FromArgb(105, 115, 125) : Color.FromArgb(100, 205, 255);
         using (var valFont = new Font("Segoe UI", 9.5f, FontStyle.Bold))
         {
             TextRenderer.DrawText(g, textVal, valFont,
                 new Rectangle(rect.X + 54, rect.Y, rect.Width - 60, rect.Height),
-                textColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
+                valColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
         }
     }
 
@@ -455,14 +526,23 @@ public class MiniHudForm : Form
         Color bgColor;
         Color borderColor;
         Color textColor;
-        bool isBold = true;
+        bool isBold;
 
-        if (_isMaxPop)
+        if (_isDimmed)
+        {
+            // Khi bị làm mờ: màu xám dịu, tắt cảnh báo
+            bgColor = Color.FromArgb(18, 20, 26);
+            borderColor = Color.FromArgb(28, 32, 40);
+            textColor = Color.FromArgb(115, 110, 125);
+            isBold = false;
+        }
+        else if (_isMaxPop)
         {
             // Khi POP >= 200: tô nền, bỏ nhấp nháy
             bgColor = Color.FromArgb(140, 32, 168);
             borderColor = Color.FromArgb(215, 75, 250);
             textColor = Color.White;
+            isBold = true;
         }
         else if (_shouldBlink)
         {
@@ -479,6 +559,7 @@ public class MiniHudForm : Form
                 borderColor = Color.FromArgb(75, 45, 88);
                 textColor = Color.FromArgb(250, 150, 255);
             }
+            isBold = true;
         }
         else
         {
@@ -496,15 +577,16 @@ public class MiniHudForm : Form
             g.DrawPath(p, path);
         }
 
-        // Tên mục bên trái
+        // Tên mục bên trái (ĐẠI LƯỢNG) - Luôn giữ màu tím đặc trưng, không bị làm mờ
+        Color labelColor = Color.FromArgb(235, 130, 255);
         using (var labelFont = new Font("Segoe UI", 9f, FontStyle.Regular))
         {
             TextRenderer.DrawText(g, "👥 POP", labelFont,
                 new Rectangle(rect.X + 6, rect.Y, 52, rect.Height),
-                textColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+                labelColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
         }
 
-        // Giá trị bên phải
+        // Giá trị bên phải (GIÁ TRỊ) - Chỉ giá trị bị làm mờ
         using (var valFont = new Font("Segoe UI", 9.5f, isBold ? FontStyle.Bold : FontStyle.Regular))
         {
             TextRenderer.DrawText(g, textVal, valFont,
@@ -527,11 +609,15 @@ public class MiniHudForm : Form
         Color textColor;
         bool isBold;
 
-        // Quy tắc tô đậm theo giá trị tài nguyên:
-        // > 500 tô đậm mức 1
-        // > 1000 tô đậm mức 2
-        // > 2000 tô đậm mức 3
-        if (amount > 2000)
+        if (_isDimmed)
+        {
+            // Làm mờ khi ngoài game/không đọc được, không tô đậm mức L1, L2, L3
+            bgColor = Color.FromArgb(18, 20, 26);
+            borderColor = Color.FromArgb(28, 32, 40);
+            textColor = Color.FromArgb(120, 125, 135);
+            isBold = false;
+        }
+        else if (amount > 2000)
         {
             bgColor = l3Bg;
             borderColor = l3Border;
@@ -568,15 +654,15 @@ public class MiniHudForm : Form
             g.DrawPath(p, path);
         }
 
-        // Nhãn biểu tượng & tên tài nguyên bên trái
+        // Nhãn biểu tượng & tên tài nguyên bên trái (ĐẠI LƯỢNG) - Luôn giữ màu đặc trưng, không bị làm mờ
         using (var labelFont = new Font("Segoe UI", 9f, FontStyle.Regular))
         {
             TextRenderer.DrawText(g, label, labelFont,
                 new Rectangle(rect.X + 6, rect.Y, 52, rect.Height),
-                textColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+                normalText, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
         }
 
-        // Số lượng tài nguyên bên phải
+        // Số lượng tài nguyên bên phải (GIÁ TRỊ) - Chỉ giá trị bị làm mờ
         using (var valFont = new Font("Segoe UI", 9.5f, isBold ? FontStyle.Bold : FontStyle.Regular))
         {
             TextRenderer.DrawText(g, textVal, valFont,
