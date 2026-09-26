@@ -20,6 +20,9 @@ public class MiniHudForm : Form
     private bool _isMaxPop = false;
     private bool _isDimmed = true;
 
+    private readonly System.Windows.Forms.Timer _suppressTimer = new();
+    private DateTime _popWarningSuppressedUntil = DateTime.MinValue;
+
     private bool _isDragging = false;
     private Point _dragStart;
     private Rectangle _closeBtnRect = new(128, 9, 16, 16);
@@ -80,6 +83,14 @@ public class MiniHudForm : Form
                 _blinkPhase = !_blinkPhase;
                 Invalidate();
             }
+        };
+
+        // Timer tự động hủy ngăn cảnh báo POP (sau 20s khi người dùng ấn xây nhà BE)
+        _suppressTimer.Tick += (s, e) =>
+        {
+            _suppressTimer.Stop();
+            CheckPopBlinkCondition();
+            Invalidate();
         };
 
         BuildContextMenu();
@@ -238,6 +249,27 @@ public class MiniHudForm : Form
         Invalidate();
     }
 
+    /// <summary>
+    /// Tự động ngăn / tạm tắt cảnh báo đè dân POP trong một khoảng thời gian nhất định (mặc định 20s khi người dùng ấn xây nhà BE).
+    /// </summary>
+    public void SuppressPopWarning(int seconds = 20)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action<int>(SuppressPopWarning), seconds);
+            return;
+        }
+
+        _popWarningSuppressedUntil = DateTime.UtcNow.AddSeconds(seconds);
+        _suppressTimer.Stop();
+        _suppressTimer.Interval = Math.Max(100, seconds * 1000);
+        _suppressTimer.Start();
+
+        CheckPopBlinkCondition();
+        Invalidate();
+    }
+
     private void CheckPopBlinkCondition()
     {
         if (_isDimmed)
@@ -248,6 +280,8 @@ public class MiniHudForm : Form
             _popBlinkTimer.Stop();
             return;
         }
+
+        bool isSuppressed = DateTime.UtcNow < _popWarningSuppressedUntil;
 
         if (_popValues.IsValid)
         {
@@ -265,22 +299,30 @@ public class MiniHudForm : Form
             {
                 _isMaxPop = false;
 
-                // Các khoảng phân tầng độc lập, tuyệt đối không để khoảng sau đè lên khoảng trước
-                if (x < 26)
+                if (isSuppressed)
                 {
-                    _shouldBlink = (diff <= 2);
+                    // Đang trong thời gian ngăn cảnh báo sau khi ấn xây nhà BE
+                    _shouldBlink = false;
                 }
-                else if (x < 50)
+                else
                 {
-                    _shouldBlink = (diff <= 4);
-                }
-                else if (x < 100)
-                {
-                    _shouldBlink = (diff <= 8);
-                }
-                else // 100 <= x < 200
-                {
-                    _shouldBlink = (diff <= 16);
+                    // Các khoảng phân tầng độc lập, tuyệt đối không để khoảng sau đè lên khoảng trước
+                    if (x < 26)
+                    {
+                        _shouldBlink = (diff <= 2);
+                    }
+                    else if (x < 50)
+                    {
+                        _shouldBlink = (diff <= 4);
+                    }
+                    else if (x < 100)
+                    {
+                        _shouldBlink = (diff <= 8);
+                    }
+                    else // 100 <= x < 200
+                    {
+                        _shouldBlink = (diff <= 16);
+                    }
                 }
             }
 
@@ -701,6 +743,8 @@ public class MiniHudForm : Form
         {
             _popBlinkTimer.Stop();
             _popBlinkTimer.Dispose();
+            _suppressTimer.Stop();
+            _suppressTimer.Dispose();
             _contextMenu.Dispose();
         }
         base.Dispose(disposing);

@@ -19,6 +19,7 @@ public partial class MainForm : Form
     private readonly PopValues _lastKnownPop = new();
     private readonly TimerValues _lastKnownTimer = new();
     private bool _isDataDimmed = true;
+    private DateTime _popSuppressedUntil = DateTime.MinValue;
 
     public MainForm()
     {
@@ -58,6 +59,7 @@ public partial class MainForm : Form
         _controlEngine.StateChanged += OnEngineStateChanged;
         _controlEngine.LogRequested += AppendLog;
         _controlEngine.FarmTimerUpdated += OnFarmTimerUpdated;
+        _controlEngine.HouseBeBuildingTriggered += OnHouseBeBuildingTriggered;
         _ocrService.ResourcesUpdated += OnResourcesUpdated;
         _ocrService.InGameStatusChanged += OnInGameStatusChangedFromResource;
         _popOcrService.PopUpdated += OnPopUpdated;
@@ -295,6 +297,11 @@ public partial class MainForm : Form
             _hudForm.UpdateResources(_lastKnownResources);
             _hudForm.UpdatePop(_lastKnownPop);
             _hudForm.UpdateTimer(_lastKnownTimer);
+            if (_popSuppressedUntil > DateTime.UtcNow)
+            {
+                int remaining = (int)Math.Ceiling((_popSuppressedUntil - DateTime.UtcNow).TotalSeconds);
+                _hudForm.SuppressPopWarning(remaining);
+            }
         }
 
         if (_hudForm.Visible)
@@ -604,6 +611,24 @@ public partial class MainForm : Form
 
         RenderResourceText();
         _hudForm?.UpdateResources(res);
+    }
+
+    private void OnHouseBeBuildingTriggered()
+    {
+        if (IsDisposed) return;
+
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(new Action(OnHouseBeBuildingTriggered));
+            }
+            catch { }
+            return;
+        }
+
+        _popSuppressedUntil = DateTime.UtcNow.AddSeconds(20);
+        _hudForm?.SuppressPopWarning(20);
     }
 
     private void OnPopUpdated(PopValues pop)

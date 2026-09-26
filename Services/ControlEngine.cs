@@ -61,6 +61,7 @@ public class ControlEngine : IDisposable
     public event Action<MacroState>? StateChanged;
     public event Action<string, Color>? LogRequested;
     public event Action<int, int>? FarmTimerUpdated;
+    public event Action? HouseBeBuildingTriggered;
 
     public MacroState CurrentState => _currentState;
 
@@ -79,6 +80,12 @@ public class ControlEngine : IDisposable
 
         _farmTimerManager.TimerTick += (r1, r2) => FarmTimerUpdated?.Invoke(r1, r2);
         _farmTimerManager.AlarmStateChanged += (msg) => Log($"[Cảnh báo] {msg}", Color.OrangeRed);
+
+        _fastBuildManager.HouseBeTriggered += () =>
+        {
+            Log("[Cảnh báo POP] Đã nhận lệnh xây Nhà Dân BE -> Tự động ngăn cảnh báo trong 20s", Color.DarkOrange);
+            HouseBeBuildingTriggered?.Invoke();
+        };
 
         _f2LoopTimer.Interval = 120; // Fire H -> C every 120ms while holding F2
         _f2LoopTimer.Tick += F2Loop_Tick;

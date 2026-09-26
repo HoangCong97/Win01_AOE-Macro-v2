@@ -22,6 +22,11 @@ public class FastBuildManager
     private bool _hasPlacedInCurrentHold = false;
     private readonly object _stateLock = new();
 
+    /// <summary>
+    /// Bắn ra khi người chơi thực hiện thao tác xây nhà dân BE (nhấn E hoặc click đặt móng BE).
+    /// </summary>
+    public event Action? HouseBeTriggered;
+
     public bool IsHoldingKey
     {
         get
@@ -131,6 +136,11 @@ public class FastBuildManager
             _keyPressStartTime = DateTime.Now;
             _hasPlacedInCurrentHold = false;
 
+            if (secondKey == (ushort)Keys.E)
+            {
+                HouseBeTriggered?.Invoke();
+            }
+
             log($"[Xây nhà nhanh] {(isSwitching ? "Đổi sang " : "")}{key} ({name}) -> {(isSwitching ? "[ESC -> " : "")}B -> {((Keys)secondKey)}{(isSwitching ? "]" : "")}", Color.DarkCyan);
 
             runAction(() =>
@@ -220,6 +230,11 @@ public class FastBuildManager
         if (!TryGetBuildingMapping(held, out ushort firstKey, out ushort secondKey, out string name))
         {
             return;
+        }
+
+        if (secondKey == (ushort)Keys.E)
+        {
+            HouseBeTriggered?.Invoke();
         }
 
         log($"[Xây nhà nhanh] Click đặt móng -> Tự động nhả chuột và gọi tiếp [B -> {((Keys)secondKey)}] ({name})", Color.DarkCyan);

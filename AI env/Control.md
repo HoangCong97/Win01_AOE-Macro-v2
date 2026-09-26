@@ -29,6 +29,17 @@
   + **Quy tắc làm mờ**: Không làm mờ đại lượng (các nhãn icon/tên như "🪵 Gỗ: ", "🥩 Thịt: ", "🪙 Vàng: ", "🪨 Đá: ", "👥 POP: ", "⏱️ Giờ: " luôn giữ nguyên màu sắc đặc trưng, rõ nét), **chỉ làm mờ duy nhất giá trị con số** của chúng.
   + Khi ở trạng thái làm mờ: Tuyệt đối không phát bất kỳ cảnh báo nào (tắt nhấp nháy viền đỏ Mini HUD, tắt nhấp nháy cảnh báo đè dân POP, tắt tô đậm màu sắc tài nguyên L1-L3, và tắt còi chuông âm thanh cảnh báo).
   + Khi nhận diện lại được tài nguyên in-game: Tất cả giá trị con số hiển thị trở lại màu sắc rõ nét bình thường và mở lại các cảnh báo theo ngưỡng.
+- Cơ chế Cảnh báo Dân số (POP) và Tự động ngăn cảnh báo khi xây nhà BE:
+  + Cảnh báo đè dân (chậm dân/cần xây nhà BE) xuất hiện trên Mini HUD bằng cách **nhấp nháy viền đỏ dày 8px** bao quanh HUD và nhấp nháy dòng POP đỏ rực theo phân tầng:
+    * POP < 26: Cảnh báo khi thiếu 2 dân (`MaxPOP - CurrentPOP <= 2`).
+    * POP < 50: Cảnh báo khi thiếu 4 dân (`MaxPOP - CurrentPOP <= 4`).
+    * POP < 100: Cảnh báo khi thiếu 8 dân (`MaxPOP - CurrentPOP <= 8`).
+    * 100 <= POP < 200: Cảnh báo khi thiếu 16 dân (`MaxPOP - CurrentPOP <= 16`).
+    * POP >= 200: Đổi màu nền tím tĩnh báo kịch trần dân số, không nhấp nháy cảnh báo.
+  + **Tự động ngăn cảnh báo 20 giây sau khi bấm xây nhà BE**:
+    * Khi người dùng nhấn phím xây nhà BE (`E`) hoặc click đặt móng BE, hệ thống ghi nhận người chơi đã tiếp nhận cảnh báo và đang cho dân xây nhà BE.
+    * Lập tức toàn bộ cảnh báo nhấp nháy viền đỏ và nhấp nháy ô POP trên Mini HUD sẽ bị **ngăn chặn / tạm ngắt trong đúng 20 giây** (trở lại màu sắc bình thường, không làm rối mắt người chơi). Con số POP vẫn tiếp tục hiển thị và cập nhật theo OCR.
+    * Sau 20 giây, nếu dân số vẫn chạm ngưỡng đè dân (do chưa xây xong móng hoặc tiếp tục sinh thêm dân chạm trần mới), cảnh báo nhấp nháy sẽ **tự động kích hoạt trở lại**. Nếu trong 20 giây người chơi bấm xây thêm nhà BE mới, bộ đếm 20 giây sẽ được gia hạn lại tính từ thời điểm bấm mới nhất.
 - Tất cả các map phím sẽ hoạt động khi ở trạng thái InGame [Active]. Khi ở ngoài InGame [Suspended], phím hoàn toàn không bị chặn, hoạt động nguyên bản của hệ thống.
 - Khi đang InGame [Active], nếu người dùng nhấn Enter để chat, thì Macro sẽ tự động Tạm dừng (SuspendedChat) để gõ chữ tự do. Khi người dùng nhấn Enter (gửi chat) hoặc Esc (hủy chat) để thoát khung chat, Macro sẽ tự động Bật lại [Active/Enabled].
 - Khi đang [Active], vô hiệu hóa phím Windows để tránh bấm nhầm văng game, đồng thời vô hiệu hóa công cụ gõ tiếng Việt.
@@ -70,7 +81,7 @@
 - Hủy móng: Khi người dùng click chuột phải, nhấn ESC hoặc chuyển cửa sổ, trạng thái xây nhà sẽ được hủy và reset về bình thường.
 
 Chi tiết các phím remapping (14 phím):
-- (E): [B -> E] (Nhà Dân BE)
+- (E): [B -> E] (Nhà Dân BE) *Lưu ý: Tự động ngăn cảnh báo POP trong 20s ngay sau khi bấm*
 - (R): [B -> S] (Nhà Kho BS)
 - (T): [B -> G] (Nhà Chứa Ruộng BG)
 - (V): [B -> M] (Nhà Chợ BM)
