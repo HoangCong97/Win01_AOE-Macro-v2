@@ -85,3 +85,11 @@ public class TimerValues
         return IsValid ? RawText! : "--:--";
     }
 }
+
+public class ChatCropSettings
+{
+    public ResourceCropBox ChatBox { get; set; } = new(450, 377, 56, 15);
+    public int Threshold { get; set; } = 255;
+    public int SourceWidth { get; set; } = 1366;
+    public int SourceHeight { get; set; } = 768;
+}

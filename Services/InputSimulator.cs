@@ -92,7 +92,14 @@ public static class InputSimulator
 
     public static void SendCtrlKeyCombo(ushort targetVk)
     {
+        bool isShiftPhysicallyPressed = (NativeMethods.GetKeyState((int)Keys.ShiftKey) & 0x8000) != 0;
         bool isCtrlPhysicallyPressed = (NativeMethods.GetKeyState((int)Keys.ControlKey) & 0x8000) != 0;
+
+        if (isShiftPhysicallyPressed)
+        {
+            ReleaseShiftKeysHardware();
+            Thread.Sleep(3);
+        }
 
         if (isCtrlPhysicallyPressed)
         {
@@ -107,6 +114,12 @@ public static class InputSimulator
             SendKeyPress(targetVk, 10);
             Thread.Sleep(3);
             SendKeyUp((ushort)Keys.ControlKey);
+        }
+
+        if (isShiftPhysicallyPressed)
+        {
+            Thread.Sleep(3);
+            SendKeyDown((ushort)Keys.ShiftKey);
         }
     }
 
@@ -296,6 +309,18 @@ public static class InputSimulator
         NativeMethods.SendInput(1, inputsUp, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
     }
 
+    public static void SendMultipleMouseClicks(int count, int holdTimeMs = 15, int intervalMs = 20)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            SendMouseClickHold(holdTimeMs);
+            if (i < count - 1 && intervalMs > 0)
+            {
+                Thread.Sleep(intervalMs);
+            }
+        }
+    }
+
     public static void ReleaseLeftMouse()
     {
         NativeMethods.INPUT[] inputsUp = new NativeMethods.INPUT[1];
@@ -421,7 +446,7 @@ public static class InputSimulator
 
     public static void ClickDiplomacy()
     {
-        IntPtr hwnd = NativeMethods.GetForegroundWindow();
+        IntPtr hwnd = AoeWindowHelper.GetAoeWindow();
         if (hwnd == IntPtr.Zero) return;
 
         if (NativeMethods.GetClientRect(hwnd, out NativeMethods.RECT rect))
@@ -454,7 +479,7 @@ public static class InputSimulator
     {
         if (slotIndex < 1 || slotIndex > 5) return;
 
-        IntPtr hwnd = NativeMethods.GetForegroundWindow();
+        IntPtr hwnd = AoeWindowHelper.GetAoeWindow();
         if (hwnd == IntPtr.Zero) return;
 
         if (NativeMethods.GetClientRect(hwnd, out NativeMethods.RECT rect))

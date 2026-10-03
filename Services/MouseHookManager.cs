@@ -126,15 +126,20 @@ public class MouseHookManager : IDisposable
         Start();
     }
 
+    public void ResetInterceptedStates()
+    {
+        _isLeftDownIntercepted = false;
+        _isRightDownIntercepted = false;
+        _isMiddleDownIntercepted = false;
+    }
+
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode >= 0)
         {
             int msg = wParam.ToInt32();
 
-            // Tá»‘i Æ°u cá»±c háº¡n: Bá» qua ngay láº­p tá»©c má»i thÃ´ng Ä‘iá»‡p di chuyá»ƒn chuá»™t (WM_MOUSEMOVE = 0x0200)
-            // KhÃ´ng cáº§n marshal struct, khÃ´ng tá»‘n CPU/GC, giÃºp kÃ©o cá»­a sá»• vÃ  lia chuá»™t siÃªu mÆ°á»£t 1000Hz+
-            // Bỏ qua ngay lập tức mọi thông điệp không phải click (mouse move, wheel, hover, etc.)
+            // Tối ưu cực hạn: Bỏ qua ngay lập tức mọi thông điệp không phải click (mouse move, wheel, hover, etc.)
             // Không marshal struct, không lock, phản hồi tức thì <0.001ms
             if (msg == 0x0200 || (msg != 0x0201 && msg != 0x0202 && msg != 0x0204 && msg != 0x0205 && msg != 0x0207 && msg != 0x0208))
             {
@@ -149,15 +154,20 @@ public class MouseHookManager : IDisposable
                 return NativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
             }
 
-            // Cháº·n toÃ n bá»™ thao tÃ¡c click chuá»™t váº­t lÃ½ cá»§a ngÆ°á»i dÃ¹ng khi Ä‘ang khÃ³a chuá»™t
+            // Chặn toàn bộ thao tác click chuột vật lý của người dùng khi đang khóa chuột
             if (MouseLockManager.IsLocked)
             {
+                if (msg == 0x0202) _isLeftDownIntercepted = false;
+                else if (msg == 0x0205) _isRightDownIntercepted = false;
+                else if (msg == 0x0208) _isMiddleDownIntercepted = false;
                 return (IntPtr)1;
             }
 
             // Vô hiệu hóa click chuột trái, phải trong khoảng thời gian Khởi đầu nhanh
             if (BlockMouseClicks && (msg == 0x0201 || msg == 0x0202 || msg == 0x0204 || msg == 0x0205))
             {
+                if (msg == 0x0202) _isLeftDownIntercepted = false;
+                else if (msg == 0x0205) _isRightDownIntercepted = false;
                 return (IntPtr)1;
             }
 
@@ -168,6 +178,7 @@ public class MouseHookManager : IDisposable
                     _isMiddleDownIntercepted = true;
                     return (IntPtr)1; // Suppress original middle mouse down
                 }
+                _isMiddleDownIntercepted = false;
                 MouseClicked?.Invoke();
             }
             else if (msg == 0x0208) // WM_MBUTTONUP
@@ -186,6 +197,7 @@ public class MouseHookManager : IDisposable
                     _isLeftDownIntercepted = true;
                     return (IntPtr)1; // Suppress original left mouse down
                 }
+                _isLeftDownIntercepted = false; // Đảm bảo click down bình thường truyền xuống game thì click up tương ứng không bị nuốt!
                 MouseClicked?.Invoke();
             }
             else if (msg == 0x0202) // WM_LBUTTONUP
@@ -203,6 +215,7 @@ public class MouseHookManager : IDisposable
                     _isRightDownIntercepted = true;
                     return (IntPtr)1; // Suppress original right mouse down
                 }
+                _isRightDownIntercepted = false; // Đảm bảo click down bình thường truyền xuống game thì click up tương ứng không bị nuốt!
                 MouseClicked?.Invoke();
                 RightButtonDown?.Invoke();
             }

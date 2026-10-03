@@ -48,8 +48,14 @@ partial class MainForm
         lblResSep4 = new Label();
         lblResourcePop = new Label();
         lblResourceRate = new Label();
+        pnlDevLoading = new Panel();
+        lblDevLoading = new Label();
+        pnlDevUnitQueue = new Panel();
+        lblDevUnitQueue = new Label();
         pnlOuterBorder.SuspendLayout();
         pnlStatusRow.SuspendLayout();
+        pnlDevLoading.SuspendLayout();
+        pnlDevUnitQueue.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)numFarmInterval).BeginInit();
         SuspendLayout();
         // 
@@ -57,6 +63,8 @@ partial class MainForm
         // 
         pnlOuterBorder.BackColor = Color.White;
         pnlOuterBorder.BorderStyle = BorderStyle.FixedSingle;
+        pnlOuterBorder.Controls.Add(pnlDevLoading);
+        pnlOuterBorder.Controls.Add(pnlDevUnitQueue);
         pnlOuterBorder.Controls.Add(btnToggleHud);
         pnlOuterBorder.Controls.Add(btnThemeToggle);
         pnlOuterBorder.Controls.Add(rtbLog);
@@ -447,6 +455,48 @@ partial class MainForm
         rtbLog.TabIndex = 8;
         rtbLog.Text = "";
         // 
+        // pnlDevLoading
+        // 
+        pnlDevLoading.BorderStyle = BorderStyle.FixedSingle;
+        pnlDevLoading.Controls.Add(lblDevLoading);
+        pnlDevLoading.Location = new Point(190, 419);
+        pnlDevLoading.Name = "pnlDevLoading";
+        pnlDevLoading.Size = new Size(185, 27);
+        pnlDevLoading.TabIndex = 14;
+        // 
+        // lblDevLoading
+        // 
+        lblDevLoading.Cursor = Cursors.Hand;
+        lblDevLoading.Dock = DockStyle.Fill;
+        lblDevLoading.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+        lblDevLoading.Location = new Point(0, 0);
+        lblDevLoading.Name = "lblDevLoading";
+        lblDevLoading.Size = new Size(183, 25);
+        lblDevLoading.TabIndex = 0;
+        lblDevLoading.Text = "🛠️ [Dev] Loading: --%";
+        lblDevLoading.TextAlign = ContentAlignment.MiddleCenter;
+        // 
+        // pnlDevUnitQueue
+        // 
+        pnlDevUnitQueue.BorderStyle = BorderStyle.FixedSingle;
+        pnlDevUnitQueue.Controls.Add(lblDevUnitQueue);
+        pnlDevUnitQueue.Location = new Point(385, 419);
+        pnlDevUnitQueue.Name = "pnlDevUnitQueue";
+        pnlDevUnitQueue.Size = new Size(185, 27);
+        pnlDevUnitQueue.TabIndex = 15;
+        // 
+        // lblDevUnitQueue
+        // 
+        lblDevUnitQueue.Cursor = Cursors.Hand;
+        lblDevUnitQueue.Dock = DockStyle.Fill;
+        lblDevUnitQueue.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+        lblDevUnitQueue.Location = new Point(0, 0);
+        lblDevUnitQueue.Name = "lblDevUnitQueue";
+        lblDevUnitQueue.Size = new Size(183, 25);
+        lblDevUnitQueue.TabIndex = 0;
+        lblDevUnitQueue.Text = "⚔️ [Dev] Xin quân: --";
+        lblDevUnitQueue.TextAlign = ContentAlignment.MiddleCenter;
+        // 
         // MainForm
         // 
         AutoScaleDimensions = new SizeF(7F, 15F);
@@ -465,6 +515,8 @@ partial class MainForm
         pnlOuterBorder.PerformLayout();
         pnlStatusRow.ResumeLayout(false);
         pnlStatusRow.PerformLayout();
+        pnlDevLoading.ResumeLayout(false);
+        pnlDevUnitQueue.ResumeLayout(false);
         ((System.ComponentModel.ISupportInitialize)numFarmInterval).EndInit();
         ResumeLayout(false);
     }
@@ -472,6 +524,10 @@ partial class MainForm
     #endregion
 
     private Panel pnlOuterBorder;
+    private Panel pnlDevLoading;
+    private Label lblDevLoading;
+    private Panel pnlDevUnitQueue;
+    private Label lblDevUnitQueue;
     private Label lblTitle;
     private Button btnToggleHud;
     private Button btnThemeToggle;

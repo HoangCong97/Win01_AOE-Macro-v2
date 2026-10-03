@@ -81,10 +81,10 @@ Dự án được viết theo cấu trúc tối giản và module hóa cao:
 ### 3.5. Quản lý Đạo ruộng (Farm Timer)
 * **Đạo ruộng 1 (F)**:
   * Nhấn `Ctrl + F`: Gán và chọn đạo ruộng 1 (`Shift + n` rồi `Ctrl + n`, mặc định n = 7). Khởi động bộ đếm thời gian ruộng 1.
-  * Nhấn `Shift + F`: Tắt còi báo ruộng 1, gửi chuỗi phím làm mới ruộng `[ESC -> n -> S -> SPACE]`, khởi động lại bộ đếm ruộng 1.
+  * Nhấn `Shift + F`: Tắt còi báo ruộng 1, gửi chuỗi phím làm mới ruộng `[ESC -> n -> S -> SPACE -> S]`, khởi động lại bộ đếm ruộng 1.
 * **Đạo ruộng 2 (G)**:
   * Nhấn `Ctrl + G`: Gán và chọn đạo ruộng 2 (`Shift + m` rồi `Ctrl + m`, mặc định m = 8). Khởi động bộ đếm thời gian ruộng 2.
-  * Nhấn `Shift + G`: Tắt còi báo ruộng 2, gửi chuỗi phím làm mới ruộng `[ESC -> m -> S -> SPACE]`, khởi động lại bộ đếm ruộng 2.
+  * Nhấn `Shift + G`: Tắt còi báo ruộng 2, gửi chuỗi phím làm mới ruộng `[ESC -> m -> S -> SPACE -> S]`, khởi động lại bộ đếm ruộng 2.
 * Khi bộ đếm về 0: Hệ thống phát cảnh báo âm thanh bíp kép liên tục (trễ 10 giây mỗi lần) và hiển thị thông báo trạng thái đạo ruộng tương ứng trên giao diện.
 
 ### 3.6. Duyệt nhà & Xin quân nhanh

@@ -14,6 +14,8 @@ public class ResourceValues
     public int? Stone { get; set; }
 
     public bool IsEmpty => !Wood.HasValue && !Food.HasValue && !Gold.HasValue && !Stone.HasValue;
+    public int ValidCount => (Wood.HasValue ? 1 : 0) + (Food.HasValue ? 1 : 0) + (Gold.HasValue ? 1 : 0) + (Stone.HasValue ? 1 : 0);
+    public bool HasSufficientInGameResources => ValidCount >= 2;
 
     public bool EqualsValues(ResourceValues? other)
     {
@@ -203,8 +205,24 @@ public class ResourceOcrService : IDisposable
 
                 try
                 {
+                    if (!AoeWindowHelper.IsAoeForeground())
+                    {
+                        if (_isInGame)
+                        {
+                            _isInGame = false;
+                            _lastRecognizedValues = null;
+                            InGameStatusChanged?.Invoke(false);
+                        }
+                        await Task.Delay(200, ct);
+                        continue;
+                    }
+
                     var res = CaptureAndRecognize();
-                    if (res != null && !res.IsEmpty)
+                    // Để chuyển trạng thái từ ngoài game vào trong game, cần nhận diện được ít nhất 2 loại tài nguyên
+                    // để loại trừ tuyệt đối các trường hợp đọc nhầm 1 chữ số rác (0, 1) từ các phần tử đồ họa khác
+                    bool isValidScan = res != null && (_isInGame ? !res.IsEmpty : res.HasSufficientInGameResources);
+
+                    if (isValidScan && res != null)
                     {
                         _lastSuccessfulScanTime = DateTime.UtcNow;
 
@@ -443,24 +461,7 @@ public class ResourceOcrService : IDisposable
 
     private static IntPtr FindAoeWindow()
     {
-        IntPtr fgHwnd = NativeMethods.GetForegroundWindow();
-        if (fgHwnd == IntPtr.Zero || NativeMethods.IsIconic(fgHwnd))
-        {
-            return IntPtr.Zero;
-        }
-
-        // Bỏ qua nếu là cửa sổ của chính Macro app
-        try
-        {
-            NativeMethods.GetWindowThreadProcessId(fgHwnd, out uint pid);
-            if (pid == Environment.ProcessId)
-            {
-                return IntPtr.Zero;
-            }
-        }
-        catch { }
-
-        return fgHwnd;
+        return AoeWindowHelper.GetAoeWindow();
     }
 
     public void Dispose()

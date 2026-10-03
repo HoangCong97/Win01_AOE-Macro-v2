@@ -231,7 +231,7 @@ public class TimerOcrService : IDisposable
         {
             while (!ct.IsCancellationRequested && await timer.WaitForNextTickAsync(ct))
             {
-                if (!_isRunning || !_isEnabled || _templates.Count == 0)
+                if (!_isRunning || !_isEnabled || _templates.Count == 0 || !AoeWindowHelper.IsAoeForeground())
                 {
                     await Task.Delay(250, ct);
                     continue;
@@ -415,23 +415,7 @@ public class TimerOcrService : IDisposable
 
     private static IntPtr FindAoeWindow()
     {
-        IntPtr fgHwnd = NativeMethods.GetForegroundWindow();
-        if (fgHwnd == IntPtr.Zero || NativeMethods.IsIconic(fgHwnd))
-        {
-            return IntPtr.Zero;
-        }
-
-        try
-        {
-            NativeMethods.GetWindowThreadProcessId(fgHwnd, out uint pid);
-            if (pid == Environment.ProcessId)
-            {
-                return IntPtr.Zero;
-            }
-        }
-        catch { }
-
-        return fgHwnd;
+        return AoeWindowHelper.GetAoeWindow();
     }
 
     public void Dispose()

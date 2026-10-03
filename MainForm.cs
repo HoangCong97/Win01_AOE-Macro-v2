@@ -13,6 +13,9 @@ public partial class MainForm : Form
     private readonly ResourceOcrService _ocrService = new();
     private readonly PopOcrService _popOcrService = new();
     private readonly TimerOcrService _timerOcrService = new();
+    private readonly LoadingOcrService _loadingOcrService = new();
+    private readonly UnitQueueOcrService _unitQueueOcrService = new();
+    private int? _lastKnownLoadingRatio = null;
     private MiniHudForm? _hudForm;
     private volatile TimerValues _currentTimer = new();
     private readonly ResourceValues _lastKnownResources = new();
@@ -31,6 +34,8 @@ public partial class MainForm : Form
         EnableDoubleBuffer(pnlOuterBorder);
         EnableDoubleBuffer(pnlKeyboardGrid);
         EnableDoubleBuffer(pnlResourceRow);
+        EnableDoubleBuffer(pnlDevLoading);
+        EnableDoubleBuffer(pnlDevUnitQueue);
         pnlResourceRow.Paint += PnlResourceRow_Paint;
         foreach (Control c in pnlResourceRow.Controls)
         {
@@ -66,6 +71,21 @@ public partial class MainForm : Form
         _ocrService.InGameStatusChanged += OnInGameStatusChangedFromResource;
         _popOcrService.PopUpdated += OnPopUpdated;
         _timerOcrService.TimerUpdated += OnTimerUpdated;
+        _loadingOcrService.LoadingProgressUpdated += OnLoadingProgressUpdated;
+        _loadingOcrService.LoadingCompleted += OnLoadingCompleted;
+        _unitQueueOcrService.UnitQueueUpdated += OnUnitQueueUpdated;
+        _controlEngine.AttachOcrServices(_loadingOcrService, _unitQueueOcrService);
+
+        lblDevLoading.Click += LblDevLoading_Click;
+        pnlDevLoading.Click += LblDevLoading_Click;
+        lblDevUnitQueue.Click += LblDevUnitQueue_Click;
+        pnlDevUnitQueue.Click += LblDevUnitQueue_Click;
+
+        var devTooltip = new ToolTip();
+        devTooltip.SetToolTip(lblDevLoading, "Ô quan sát tỉ lệ Loading dành cho Dev (Threshold = 190)\nClick vào để quét thử hoặc in log chi tiết");
+        devTooltip.SetToolTip(pnlDevLoading, "Ô quan sát tỉ lệ Loading dành cho Dev (Threshold = 190)\nClick vào để quét thử hoặc in log chi tiết");
+        devTooltip.SetToolTip(lblDevUnitQueue, "Ô quan sát số lượng xin quân / xóc quân dành cho Dev (Threshold = 190)\nClick vào để quét thử hoặc in log chi tiết");
+        devTooltip.SetToolTip(pnlDevUnitQueue, "Ô quan sát số lượng xin quân / xóc quân dành cho Dev (Threshold = 190)\nClick vào để quét thử hoặc in log chi tiết");
 
         ApplyTheme();
         UpdateStatusUI(_controlEngine.CurrentState);
@@ -80,6 +100,7 @@ public partial class MainForm : Form
         _ocrService.Start();
         _popOcrService.Start();
         _timerOcrService.Start();
+        // LoadingOcrService và UnitQueueOcrService quét theo cơ chế On-Demand khi kích hoạt Xin quân nhanh (không chạy timer nền định kỳ)
 
         var hudSettings = ConfigService.LoadSettings().Hud ?? new HudSettings();
         _hudForm = new MiniHudForm(hudSettings);
@@ -155,6 +176,9 @@ public partial class MainForm : Form
 
         _timerOcrService.Stop();
         _timerOcrService.Dispose();
+
+        _loadingOcrService.Dispose();
+        _unitQueueOcrService.Dispose();
 
         _controlEngine.Stop();
         _controlEngine.Dispose();
@@ -414,6 +438,14 @@ public partial class MainForm : Form
         rtbLog.BackColor = logBg;
         rtbLog.ForeColor = textColor;
 
+        Color devBoxBg = _isDarkMode ? Color.FromArgb(28, 36, 48) : Color.FromArgb(235, 245, 252);
+        Color devTextColor = _isDarkMode ? Color.FromArgb(0, 220, 255) : Color.FromArgb(0, 110, 160);
+        pnlDevLoading.BackColor = devBoxBg;
+        lblDevLoading.ForeColor = devTextColor;
+
+        pnlDevUnitQueue.BackColor = devBoxBg;
+        lblDevUnitQueue.ForeColor = devTextColor;
+
         Color resPanelBg = _isDarkMode ? Color.FromArgb(28, 28, 34) : Color.FromArgb(245, 246, 250);
         pnlResourceRow.BackColor = resPanelBg;
         pnlResourceRow.BorderStyle = BorderStyle.FixedSingle;
@@ -445,6 +477,22 @@ public partial class MainForm : Form
         var popSettings = ConfigService.LoadSettings().PopCrop ?? new PopCropSettings();
         _popOcrService.UpdateSettings(popSettings);
         _popOcrService.LoadTemplates();
+
+        var timerSettings = ConfigService.LoadSettings().TimerCrop ?? new TimerCropSettings();
+        _timerOcrService.UpdateSettings(timerSettings);
+        _timerOcrService.LoadTemplates();
+
+        var chatSettings = ConfigService.LoadSettings().ChatCrop ?? new ChatCropSettings();
+        _controlEngine.ChatDetector.UpdateSettings(chatSettings);
+        _controlEngine.ChatDetector.LoadTemplates();
+
+        var loadingSettings = ConfigService.LoadSettings().LoadingCrop ?? new LoadingCropSettings();
+        _loadingOcrService.UpdateSettings(loadingSettings);
+        _loadingOcrService.LoadTemplates();
+
+        var queueSettings = ConfigService.LoadSettings().UnitQueueCrop ?? new UnitQueueCropSettings();
+        _unitQueueOcrService.UpdateSettings(queueSettings);
+        _unitQueueOcrService.LoadTemplates();
     }
 
     private void OnInGameStatusChangedFromResource(bool inGame)
@@ -669,6 +717,12 @@ public partial class MainForm : Form
         _ocrService.Reset();
         _popOcrService.Reset();
         _timerOcrService.Reset();
+        _controlEngine.ChatDetector.Reset();
+        _loadingOcrService.Reset();
+        _unitQueueOcrService.Reset();
+        _lastKnownLoadingRatio = null;
+        lblDevLoading.Text = "🛠️ [Dev] Loading: --%";
+        lblDevUnitQueue.Text = "⚔️ [Dev] Xin quân: --";
 
         // 3. Render lại toàn bộ giao diện Form chính về dạng --
         RenderAllDataText();
@@ -802,6 +856,9 @@ public partial class MainForm : Form
         _ocrService.SetEnabled(isAppEnabled);
         _popOcrService.SetEnabled(isAppEnabled);
         _timerOcrService.SetEnabled(isAppEnabled);
+        _controlEngine.ChatDetector.SetEnabled(isAppEnabled);
+        _loadingOcrService.SetEnabled(isAppEnabled);
+        _unitQueueOcrService.SetEnabled(isAppEnabled);
 
         if (IsDisposed) return;
 
@@ -903,5 +960,148 @@ public partial class MainForm : Form
                 ?.SetValue(ctrl, true, null);
         }
         catch { }
+    }
+
+    private void OnLoadingProgressUpdated(LoadingValues loading)
+    {
+        _controlEngine.NotifyLoadingProgress(loading);
+
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(new Action<LoadingValues>(UpdateLoadingUI), loading); } catch { }
+        }
+        else
+        {
+            UpdateLoadingUI(loading);
+        }
+    }
+
+    private void UpdateLoadingUI(LoadingValues loading)
+    {
+        if (loading != null && loading.IsValid && loading.Percentage.HasValue)
+        {
+            int val = loading.Percentage.Value;
+            lblDevLoading.Text = $"🛠️ [Dev] Loading: {val}%";
+            lblDevLoading.ForeColor = val >= 100 
+                ? (_isDarkMode ? Color.FromArgb(70, 255, 130) : Color.FromArgb(30, 150, 60))
+                : (_isDarkMode ? Color.FromArgb(255, 200, 60) : Color.FromArgb(210, 120, 0));
+
+            _lastKnownLoadingRatio = val;
+        }
+        else
+        {
+            lblDevLoading.Text = "🛠️ [Dev] Loading: --%";
+            lblDevLoading.ForeColor = _isDarkMode ? Color.FromArgb(0, 220, 255) : Color.FromArgb(0, 110, 160);
+            _lastKnownLoadingRatio = null;
+        }
+    }
+
+    private void OnLoadingCompleted(LoadingValues loading)
+    {
+        _controlEngine.NotifyLoadingCompleted(loading);
+
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(new Action<LoadingValues>(HandleLoadingCompleted), loading); } catch { }
+        }
+        else
+        {
+            HandleLoadingCompleted(loading);
+        }
+    }
+
+    private void HandleLoadingCompleted(LoadingValues loading)
+    {
+        lblDevLoading.Text = "🛠️ [Dev] Loading: 100% (Xong)";
+        lblDevLoading.ForeColor = _isDarkMode ? Color.FromArgb(70, 255, 130) : Color.FromArgb(30, 150, 60);
+        // Không in vào rtbLog theo yêu cầu
+    }
+
+    private void LblDevLoading_Click(object? sender, EventArgs e)
+    {
+        try
+        {
+            var res = _loadingOcrService.CaptureAndRecognize();
+            var box = _loadingOcrService.CropSettings.LoadingBox;
+            IntPtr hwnd = AoeWindowHelper.FindAnyAoeWindow();
+            bool hasWindow = hwnd != IntPtr.Zero;
+
+            if (res != null && res.IsValid)
+            {
+                lblDevLoading.Text = $"🛠️ [Dev] Loading: {res.Percentage}%";
+                AppendLog($"[DEV DEBUG] Quét thủ công Box ({box.X},{box.Y},{box.Width}x{box.Height}): Tỉ lệ = {res.Percentage}% | Raw: '{res.RawText}' | Cửa sổ AOE: {(hasWindow ? "Tìm thấy" : "Không")}", Color.Cyan);
+            }
+            else
+            {
+                AppendLog($"[DEV DEBUG] Quét thủ công Box ({box.X},{box.Y},{box.Width}x{box.Height}): Chưa nhận diện được số (Raw: '{res?.RawText ?? "null"}') | Cửa sổ AOE: {(hasWindow ? "Tìm thấy" : "Chưa bật/chưa vào bàn")}", Color.DarkOrange);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"[DEV DEBUG] Lỗi khi quét thủ công: {ex.Message}", Color.Red);
+        }
+    }
+
+    private void OnUnitQueueUpdated(UnitQueueValues queue)
+    {
+        _controlEngine.NotifyUnitQueue(queue);
+
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(new Action<UnitQueueValues>(UpdateUnitQueueUI), queue); } catch { }
+        }
+        else
+        {
+            UpdateUnitQueueUI(queue);
+        }
+    }
+
+    private void UpdateUnitQueueUI(UnitQueueValues queue)
+    {
+        if (queue != null && queue.IsValid)
+        {
+            lblDevUnitQueue.Text = (queue.SlotIndex > 0)
+                ? $"⚔️ [Dev] Xin quân (Ô {queue.SlotIndex}): {queue.RawText}"
+                : $"⚔️ [Dev] Xin quân: {queue.RawText}";
+            lblDevUnitQueue.ForeColor = _isDarkMode ? Color.FromArgb(255, 200, 60) : Color.FromArgb(210, 120, 0);
+            // Không in vào rtbLog theo yêu cầu
+        }
+        else
+        {
+            lblDevUnitQueue.Text = "⚔️ [Dev] Xin quân: --";
+            lblDevUnitQueue.ForeColor = _isDarkMode ? Color.FromArgb(0, 220, 255) : Color.FromArgb(0, 110, 160);
+        }
+    }
+
+    private void LblDevUnitQueue_Click(object? sender, EventArgs e)
+    {
+        try
+        {
+            var res = _unitQueueOcrService.CaptureAndRecognize();
+            var box = _unitQueueOcrService.CropSettings.QueueBox;
+            IntPtr hwnd = AoeWindowHelper.FindAnyAoeWindow();
+            bool hasWindow = hwnd != IntPtr.Zero;
+
+            int boxCount = _unitQueueOcrService.CropSettings.QueueBoxes?.Count ?? 5;
+            if (res != null && res.IsValid)
+            {
+                string slotStr = (res.SlotIndex > 0) ? $" tại Ô {res.SlotIndex}" : "";
+                lblDevUnitQueue.Text = (res.SlotIndex > 0)
+                    ? $"⚔️ [Dev] Xin quân (Ô {res.SlotIndex}): {res.RawText}"
+                    : $"⚔️ [Dev] Xin quân: {res.RawText}";
+                AppendLog($"[DEV DEBUG] Quét xin quân {boxCount} ô{slotStr}: Số lượng = '{res.RawText}' (Tổng: {res.TotalCount}) | Cửa sổ AOE: {(hasWindow ? "Tìm thấy" : "Không")}", Color.Cyan);
+            }
+            else
+            {
+                AppendLog($"[DEV DEBUG] Quét xin quân {boxCount} ô: Không phát hiện số xin quân (Raw: '{res?.RawText ?? "null"}') | Cửa sổ AOE: {(hasWindow ? "Tìm thấy" : "Chưa bật/chưa vào bàn")}", Color.DarkOrange);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"[DEV DEBUG] Lỗi khi quét xin quân thủ công: {ex.Message}", Color.Red);
+        }
     }
 }

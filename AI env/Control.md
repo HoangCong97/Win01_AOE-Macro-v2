@@ -9,12 +9,13 @@
 ## 2. Quy ước
 **Ghi chú**
 - User input: sử dụng dấu (...) để biểu thị input của user
-- Macro output: sử dụng dấu [..]để biểu thị output của macro
+- Macro output: sử dụng dấu [...] để biểu thị output của macro
 - Ghi chú: sử dụng dấu *...* để thể hiện ghi chú
 - Phím ấn đồng thời: sử dụng + để ấn đồng thời
 - Phím tuần tự: sử dụng > hoặc -> để thể hiện ấn tuần tự
 - Double tap: sử dụng >> để biểu thị ấn Double tap (<200ms)
-- Ấn giữ: sử dụng - để biểu bị ấn giữ (ví dụ A-A)
+- Ấn giữ: sử dụng - để biểu thị ấn giữ (ví dụ A-A)
+- Loop: sử dụng ^ để biểu thị lặp lại (ví dụ (H > C) ^ 2 = H > C > H > C )
 
 ## 3. Controll
 ** Chức năng: điều khiển**
@@ -41,7 +42,7 @@
     * Lập tức toàn bộ cảnh báo nhấp nháy viền đỏ và nhấp nháy ô POP trên Mini HUD sẽ bị **ngăn chặn / tạm ngắt trong đúng 20 giây** (trở lại màu sắc bình thường, không làm rối mắt người chơi). Con số POP vẫn tiếp tục hiển thị và cập nhật theo OCR.
     * Sau 20 giây, nếu dân số vẫn chạm ngưỡng đè dân (do chưa xây xong móng hoặc tiếp tục sinh thêm dân chạm trần mới), cảnh báo nhấp nháy sẽ **tự động kích hoạt trở lại**. Nếu trong 20 giây người chơi bấm xây thêm nhà BE mới, bộ đếm 20 giây sẽ được gia hạn lại tính từ thời điểm bấm mới nhất.
 - Tất cả các map phím sẽ hoạt động khi ở trạng thái InGame [Active]. Khi ở ngoài InGame [Suspended], phím hoàn toàn không bị chặn, hoạt động nguyên bản của hệ thống.
-- Khi đang InGame [Active], nếu người dùng nhấn Enter để chat, thì Macro sẽ tự động Tạm dừng (SuspendedChat) để gõ chữ tự do. Khi người dùng nhấn Enter (gửi chat) hoặc Esc (hủy chat) để thoát khung chat, Macro sẽ tự động Bật lại [Active/Enabled].
+- Nhận diện trạng thái Chat bằng điểm ảnh (thay vì phím Enter như bản cũ): Dịch vụ quét tự động nhận diện khung chat bằng template điểm ảnh CHAT (Threshold = 255, so khớp cả 2 màu trắng và đen). Khi phát hiện mở khung chat, Macro tự động chuyển sang Tạm dừng [SuspendedChat] để gõ chữ tự do; khi khung chat đóng, Macro tự động Bật lại [Active/Enabled]. Phím Enter và Esc vẫn hoạt động tự nhiên và kích hoạt quét tức thì để chuyển trạng thái nhanh (<15ms).
 - Khi đang [Active], vô hiệu hóa phím Windows để tránh bấm nhầm văng game, đồng thời vô hiệu hóa công cụ gõ tiếng Việt.
 
 **Chức năng: Khởi đầu nhanh**
@@ -51,9 +52,9 @@
   - *Cơ chế chạy tự động*: Vì Macro đã bật sẵn khi khởi động app, dịch vụ OCR quét liên tục và tự động kích hoạt ngay khi vào trận mà người chơi không cần bấm F1 hay thao tác gì thêm.
   - **Thao tác thực thi**:
     1. Ấn phím: [F4 > F11].
-    2. Sau đó thực hiện [H > C] nhanh 8 lần liên tiếp.
+    2. Sau đó thực hiện [H > C ^ 6].
     3. Trong suốt thời gian thực thi chuỗi này: Vô hiệu hóa toàn bộ click chuột trái và chuột phải vật lý của người dùng để tránh thao tác nhầm / lệch focus.
-    4. Ngay khi thực hiện xong 8 lần [H > C]: Tự động mở lại click chuột trái, phải và reset toàn bộ các bộ đếm / chuỗi phím về trạng thái sơ khai ban đầu.
+    4. Ngay khi thực hiện xong [H > C ^ 6]: Tự động mở lại click chuột trái, phải và reset toàn bộ các bộ đếm / chuỗi phím về trạng thái sơ khai ban đầu.
   - **Cơ chế kiểm soát an toàn & chống spam**:
     - **Kiểm soát Timer**: Chỉ vô hiệu hóa khi đồng hồ game thực tế đang hiển thị trên màn hình và đã qua giai đoạn đầu (> 5 giây). Nếu chưa có timer trên màn hình (chưa bấm F11) hoặc timer đang ở thời điểm đầu trận (00:00 - 00:05), chức năng vẫn kích hoạt bình thường. Timer lưu trữ từ ván trước tuyệt đối không ảnh hưởng đến ván đấu mới.
     - **Kiểm soát trigger đè**: Không cho phép kích hoạt lặp nếu một chuỗi khởi đầu nhanh đang trong quá trình thực thi.
@@ -63,6 +64,11 @@
 **Chức năng: Mở bảng ngoại giao & Timeline**
 (F3): Click nút Diplomacy (bảng ngoại giao) - Khóa chuột và ghim tại nút trong thời gian xử lý, sau khi xong trả chuột và bù vào chuyển động đã mất của người dùng.
 (F4): Mở timeline [F10 -> Mũi tên xuống * 2 -> Enter] - Khóa chuột tại chỗ trong thời gian mở menu để tránh sai sót, sau khi xong trả chuột và bù vào chuyển động đã mất của người dùng. 
+
+**Chức năng: Chuyển đồ nhanh**
+- Khi (F3) mở Diplomacy: Chuyển sang trạng thái mở bảng Diplomacy.
+- Nếu người dùng giữ CTRL + CLICK, thì thay vì 1 click thì sẽ thành 5 CLICK (bơm nhanh 500 tài nguyên).
+- Ấn (F3) lần nữa [ESC] hoặc user (SPACE) [SPACE] thì sẽ thoát trạng thái Diplomacy và giữ nguyên chức năng SPACE.
 
 **Chức năng: Làm mới toàn bộ trạng thái (Refresh - Phím F5)**
 - Khi ấn phím (F5), phần mềm sẽ đưa tất cả về trạng thái ban đầu:
@@ -111,9 +117,6 @@ Chi tiết các phím remapping (14 phím):
 - (C): [B -> P] (Nhà Phù Thủy BP)
 
 **Chức năng: Duyệt nhà binh**
-*Mô tả cơ chế hoạt động (Mẫu 2):*
-- Cho phép người dùng duyệt qua (xoay vòng chọn) các nhà binh đã xây bằng tổ hợp phím CTRL + Phím.
-- *Lưu ý:* Nếu người dùng giữ phím CTRL vật lý liên tục và nhấn phím chữ (ví dụ giữ CTRL và nhấn liên tục A, A, A...), hệ thống vẫn nhận diện chính xác và gửi từng lệnh duyệt nhà tương ứng.
 
 Chi tiết các phím remapping:
 - (CTRL + A): [CTRL + A] Duyệt nhà bắn cung
@@ -123,18 +126,28 @@ Chi tiết các phím remapping:
 - (CTRL + D): [CTRL + B] Duyệt nhà lính chùy 
 - (CTRL + C): [CTRL + P] Duyệt nhà phù thủy 
 
+- Cho phép người dùng duyệt qua (xoay vòng chọn) các nhà binh đã xây bằng tổ hợp phím CTRL + Phím.
+- *Lưu ý:* Nếu người dùng giữ phím CTRL vật lý liên tục và nhấn phím chữ (ví dụ giữ CTRL và nhấn liên tục A, A, A...), hệ thống vẫn nhận diện chính xác và gửi từng lệnh duyệt nhà tương ứng.
+- Khi người dùng ấn giữ (CTRL + KEY) và sau đó người dùng click chuột trái, thì cứ mỗi lần click chuột trái sẽ [CLICK -> CTRL + KEYMAP] 1 lần
+
+
 **Chức năng: Xin quân nhanh**
 *Mô tả cơ chế hoạt động:*
 - Cho phép người dùng duyệt qua (xoay vòng chọn) các nhà binh đã xây bằng tổ hợp phím SHIFT + Phím.
 - *Lưu ý:* Nếu người dùng giữ phím SHIFT vật lý liên tục và nhấn phím chữ (ví dụ giữ SHIFT và nhấn liên tục A, A, A...), hệ thống vẫn nhận diện chính xác và gửi từng lệnh duyệt nhà binh tương ứng.
 
 Chi tiết các phím remapping:
-- (SHIFT + A): [CTRL + A] | Từ lần 2 trở đi, sẽ là [CTRL + A -> Click chuột]
-- (SHIFT + S): [CTRL + L] | Từ lần 2 trở đi, sẽ là [CTRL + L -> Click chuột] 
-- (SHIFT + Z): [CTRL + K] | Từ lần 2 trở đi, sẽ là [CTRL + K -> Click chuột]
-- (SHIFT + X): [CTRL + Y] | Từ lần 2 trở đi, sẽ là [CTRL + Y -> Click chuột]
-- (SHIFT + D): [CTRL + B] | Từ lần 2 trở đi, sẽ là [CTRL + B -> Click chuột] 
-- (SHIFT + C): [CTRL + P] | Từ lần 2 trở đi, sẽ là [CTRL + P -> Click chuột]
+- (SHIFT + A): [CTRL + A] | Từ lần 2 trở đi, sẽ là [*Kiểm tra hàng đợi quân* -> CTRL + A]
+- (SHIFT + S): [CTRL + L] | Từ lần 2 trở đi, sẽ là [*Kiểm tra hàng đợi quân* -> CTRL + L]
+- (SHIFT + Z): [CTRL + K] | Từ lần 2 trở đi, sẽ là [*Kiểm tra hàng đợi quân* -> CTRL + K]
+- (SHIFT + X): [CTRL + Y] | Từ lần 2 trở đi, sẽ là [*Kiểm tra hàng đợi quân* -> CTRL + Y]
+- (SHIFT + D): [CTRL + B] | Từ lần 2 trở đi, sẽ là [*Kiểm tra hàng đợi quân* -> CTRL + B] 
+- (SHIFT + C): [CTRL + P] | Từ lần 2 trở đi, sẽ là [*Kiểm tra hàng đợi quân* -> CTRL + P]
+
+*Kiểm tra hàng đợi quân*:
+	Nếu hàng đợi null: [Click]
+	Nếu hàng đợi = 1, loading < 50: [Nothing]
+	Nếu hàng đợi = 1, loading >= 50: [Click]
 
 **Chức năng: Tab công nghệ**
 (CTRL+TAB): [SHIFT+9 -> CTRL+9]
@@ -145,28 +158,8 @@ Chi tiết các phím remapping:
   + Quá 20 giây kể từ lần nhấn cuối cùng.
 - Lưu ý: không chắn tính năng ALT+TAB
 
-
-
 **Chức năng: Đạo ruộng nhanh**
 *Mô tả cơ chế hoạt động:*
-Cũ: 
-- Hỗ trợ quản lý song song 2 đạo ruộng độc lập (Đạo 1 mặc định là đạo 7, Đạo 2 mặc định là đạo 8) giúp tối ưu hóa việc quản lý ruộng trong game.
-- **Đạo ruộng 1 (phím F)**:
-  + Nhấn phím (CTRL + F): Gán và chọn đạo ruộng 1 (mặc định là đạo 7) thông qua chuỗi phím [SHIFT + n -> CTRL + n]. Khởi động bộ đếm thời gian ruộng 1 (không reset nếu đã chạy).
-  + Nhấn tổ hợp phím [ SHIFT + F ]: Tắt âm thanh cảnh báo của ruộng 1, đồng thời tự động chạy chuỗi phím làm mới ruộng [n -> S -> SPACE]. Khởi động lại bộ đếm ruộng 1.
-- **Đạo ruộng 2 (phím G)**:
-  + Nhấn phím (CTRL + G): Gán và chọn đạo ruộng 2 (mặc định là đạo 8) thông qua chuỗi phím [SHIFT + m -> CTRL + m]. Khởi động bộ đếm thời gian ruộng 2 (không reset nếu đã chạy).
-  + Nhấn tổ hợp phím [ SHIFT + G ]: Tắt âm thanh cảnh báo của ruộng 2, đồng thời tự động chạy chuỗi phím làm mới ruộng [m -> S -> SPACE]. Khởi động lại bộ đếm ruộng 2.
-- *Nhắc nhở ruộng hết hạn:* Khi bất kỳ đạo ruộng nào đếm ngược về 0, hệ thống phát cảnh báo âm thanh bíp kép liên tục, nhưng mỗi lần trễ 10 giây và hiển thị thông báo trạng thái đạo ruộng tương ứng trên giao diện.
-
-Chi tiết phím remapping:
-- (CTRL + F): [SHIFT + n -> CTRL + n] Gán và chọn đạo ruộng 1 (mặc định n = 7)
-- (SHIFT + F): Tắt còi báo và tự động thực thi [ESC -> n -> S -> SPACE] để làm mới đạo ruộng 1
-- (CTRL + G): [SHIFT + m -> CTRL + m] Gán và chọn đạo ruộng 2 (mặc định m = 8)7s 
-- (SHIFT + G): Tắt còi báo và tự động thực thi [ESC -> m -> S -> SPACE] để làm mới đạo ruộng 2
-
-Thời gian của bộ đếm: mặc định 200s, nếu set khác thì sẽ lưu theo giá trị mới dù có tắt app
-
 Mới:
 - **Đạo ruộng 1 (phím F)**:
   + (Nhấn phím CTRL + F): [7 -> CTRL down]
@@ -174,7 +167,7 @@ Mới:
   + (Nhả CTRL): [CTRL up]
   Khởi động bộ đếm thời gian ruộng 1 (không reset nếu đã chạy).
   *Lưu ý, người dùng sẽ không nhả phím CTRL, chỉ hủy liên tục khi người dùng nhả CTRL*
-  + (SHIFT + F): Tắt còi báo và tự động thực thi [ESC -> 7 -> S -> SPACE] để làm mới đạo ruộng 1
+  + (SHIFT + F): Tắt còi báo và tự động thực thi [ESC -> 7 -> S -> SPACE -> S] để làm mới đạo ruộng 1
   
 - **Đạo ruộng 2 (phím G)**:
   + (Nhấn phím CTRL + G): [8 -> CTRL down]
@@ -182,7 +175,7 @@ Mới:
   + (Nhả CTRL): [CTRL up]
   Khởi động bộ đếm thời gian ruộng 2 (không reset nếu đã chạy).
   *Lưu ý, người dùng sẽ không nhả phím CTRL, chỉ hủy liên tục khi người dùng nhả CTRL*
-  + (SHIFT + G): Tắt còi báo và tự động thực thi [ESC -> 8 -> S -> SPACE] để làm mới đạo ruộng 2
+  + (SHIFT + G): Tắt còi báo và tự động thực thi [ESC -> 8 -> S -> SPACE ->S] để làm mới đạo ruộng 2
 
 *Lưu ý khi làm mới ruộng (SHIFT + F / SHIFT + G):*
 - Người dùng có thể giữ phím SHIFT liên tục: bấm SHIFT + F rồi bấm tiếp G (hoặc SHIFT + G rồi bấm tiếp F) mà không cần nhả phím SHIFT. Hệ thống tự nhận diện và thực thi làm mới liên tục cho từng đạo ruộng mà không bị mất phím hay xung đột.

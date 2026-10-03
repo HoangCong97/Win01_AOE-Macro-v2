@@ -8,19 +8,24 @@ public class ControlEngine : IDisposable
     private readonly KeyboardHookManager _keyboardHook = new();
     private readonly MouseHookManager _mouseHook = new();
     private readonly GameStateWatcher _gameWatcher = new();
+    private readonly ChatDetectionService _chatDetector = new();
     private readonly FarmTimerManager _farmTimerManager = new();
     private readonly VayEManager _vayEManager = new();
     private readonly FastBuildManager _fastBuildManager = new();
     private readonly DeleteManager _deleteManager;
+    private readonly MilitaryCycleManager _militaryCycleManager = new();
     private readonly System.Windows.Forms.Timer _f2LoopTimer = new();
+    private readonly System.Windows.Forms.Timer _cursorLockTimer = new();
     private readonly SemaphoreSlim _actionLock = new(1, 1);
+
+    public ChatDetectionService ChatDetector => _chatDetector;
 
     private MacroState _currentState = MacroState.Disabled;
     private MacroState _savedStateBeforeUnfocus = MacroState.Active;
+    private bool _hasAppliedCursorLock = false;
 
     private bool _isF2Pressed = false;
-
-
+    private bool _isDiplomacyOpen = false;
 
     // Quick Recruit / Military Cycle SHIFT tracking state
     private Keys _lastShiftMilitaryKey = Keys.None;
@@ -64,6 +69,44 @@ public class ControlEngine : IDisposable
     public event Action? HouseBeBuildingTriggered;
     public event Action<bool>? TestModeChanged;
     public event Action? RefreshRequested;
+    public event Action<LoadingValues>? LoadingProgressUpdated;
+    public event Action<LoadingValues>? LoadingCompleted;
+    public event Action<UnitQueueValues>? UnitQueueUpdated;
+
+    private LoadingValues? _currentLoading;
+    public LoadingValues? CurrentLoading => _currentLoading;
+    public int? CurrentLoadingRatio => _currentLoading?.Percentage;
+
+    private UnitQueueValues? _currentUnitQueue;
+    public UnitQueueValues? CurrentUnitQueue => _currentUnitQueue;
+    public int? CurrentUnitQueueCount => _currentUnitQueue?.PrimaryCount;
+
+    public void NotifyLoadingProgress(LoadingValues loading)
+    {
+        _currentLoading = loading;
+        LoadingProgressUpdated?.Invoke(loading);
+    }
+
+    public void NotifyLoadingCompleted(LoadingValues loading)
+    {
+        _currentLoading = loading;
+        LoadingCompleted?.Invoke(loading);
+    }
+
+    public void NotifyUnitQueue(UnitQueueValues queue)
+    {
+        _currentUnitQueue = queue;
+        UnitQueueUpdated?.Invoke(queue);
+    }
+
+    private LoadingOcrService? _loadingOcrService;
+    private UnitQueueOcrService? _unitQueueOcrService;
+
+    public void AttachOcrServices(LoadingOcrService loadingOcr, UnitQueueOcrService queueOcr)
+    {
+        _loadingOcrService = loadingOcr;
+        _unitQueueOcrService = queueOcr;
+    }
 
     private bool _isTestMode = false;
     public bool IsTestMode => _isTestMode;
@@ -81,6 +124,7 @@ public class ControlEngine : IDisposable
         _mouseHook.RightClickActionOccurred += OnRightClickAction;
         _gameWatcher.InGameStatusChanged += OnInGameStatusChanged;
         _gameWatcher.ChatStatusChanged += OnChatStatusChanged;
+        _chatDetector.ChatStatusChanged += OnChatStatusChanged;
 
         _farmTimerManager.TimerTick += (r1, r2) => FarmTimerUpdated?.Invoke(r1, r2);
         _farmTimerManager.AlarmStateChanged += (msg) => Log($"[Cảnh báo] {msg}", Color.OrangeRed);
@@ -93,6 +137,10 @@ public class ControlEngine : IDisposable
 
         _f2LoopTimer.Interval = 120; // Fire H -> C every 120ms while holding F2
         _f2LoopTimer.Tick += F2Loop_Tick;
+
+        _cursorLockTimer.Interval = 80; // Định kỳ kiểm tra và giữ chuột không tràn ra màn hình 2 khi chơi game
+        _cursorLockTimer.Tick += CursorLockTimer_Tick;
+        _cursorLockTimer.Start();
     }
 
     public void SetFarmTimerInterval(int seconds)
@@ -169,6 +217,7 @@ public class ControlEngine : IDisposable
         MouseLockManager.Initialize();
         StartHooks();
         _gameWatcher.Start();
+        _chatDetector.Start();
         SetState(MacroState.SuspendedOutOfGame, "Khởi tạo hệ thống: Macro đã BẬT -> Trạng thái: [Tạm dừng (Chờ vào trận)]");
     }
 
@@ -179,9 +228,15 @@ public class ControlEngine : IDisposable
 
     public void Stop()
     {
+        _cursorLockTimer.Stop();
         MouseLockManager.ForceUnlock();
+        MouseLockManager.UnpinCursor();
+        _hasAppliedCursorLock = false;
+        _chatDetector.Stop();
         _vayEManager.Reset();
         _deleteManager.Reset();
+        _militaryCycleManager.Reset();
+        _isDiplomacyOpen = false;
         SystemPolicyManager.SetLockWorkstationDisabled(false);
         _f2LoopTimer.Stop();
         _farmTimerManager.StopAllTimersAndAlarms();
@@ -252,9 +307,9 @@ public class ControlEngine : IDisposable
 
     private void OnMouseClick()
     {
-        if (_fastBuildManager.IsHoldingKey)
+        if (_fastBuildManager.IsHoldingKey || _isDiplomacyOpen)
         {
-            // Đang giữ phím xây nhà -> Cú click này là để đặt móng, không được reset chuỗi xây nhà!
+            // Đang giữ phím xây nhà hoặc đang mở Diplomacy -> Không reset chuỗi
             _lastTabTime = DateTime.MinValue;
             _lastShiftMilitaryKey = Keys.None;
             _lastShiftMilitaryTime = DateTime.MinValue;
@@ -302,7 +357,7 @@ public class ControlEngine : IDisposable
 
     private bool OnLeftClickAction(int msg)
     {
-        if ((_currentState != MacroState.Active || !_gameWatcher.IsInGame) && !_isTestMode)
+        if ((_currentState != MacroState.Active || !_gameWatcher.IsInGame || !AoeWindowHelper.IsAoeForeground()) && !_isTestMode)
         {
             return false;
         }
@@ -346,6 +401,54 @@ public class ControlEngine : IDisposable
             return true;
         }
 
+        // **Chức năng: Chuyển đồ nhanh** (Khi mở Diplomacy: giữ CTRL + CLICK -> 5 CLICK)
+        if (_isDiplomacyOpen)
+        {
+            bool isCtrlActive = _isPhysicalCtrlDown ||
+                                (NativeMethods.GetAsyncKeyState((int)Keys.ControlKey) & 0x8000) != 0 ||
+                                (NativeMethods.GetKeyState((int)Keys.ControlKey) & 0x8000) != 0;
+            if (isCtrlActive)
+            {
+                Log("[Chuyển đồ nhanh] CTRL + Click -> Khóa chuột, gửi 5 click chuyển đồ (+500 tài nguyên) và bù chuyển động", Color.Magenta);
+                RunActionSync(() =>
+                {
+                    try
+                    {
+                        MouseLockManager.ExecuteLockedAction(() =>
+                        {
+                            InputSimulator.SendMultipleMouseClicks(5, 15, 20);
+                        }, pinAtCurrentPos: true);
+                    }
+                    finally
+                    {
+                        _mouseHook.ResetInterceptedStates();
+                        InputSimulator.ReleaseLeftMouse();
+                    }
+                });
+                return true;
+            }
+            return false;
+        }
+
+        // Duyệt nhà binh: Khi người dùng ấn giữ (CTRL + KEY) và sau đó click chuột trái, cứ mỗi lần click chuột trái sẽ [CLICK -> CTRL + KEYMAP] 1 lần
+        if (_militaryCycleManager.IsActive)
+        {
+            bool isCtrlActive = _isPhysicalCtrlDown ||
+                                (NativeMethods.GetAsyncKeyState((int)Keys.ControlKey) & 0x8000) != 0 ||
+                                (NativeMethods.GetKeyState((int)Keys.ControlKey) & 0x8000) != 0;
+            if (isCtrlActive)
+            {
+                if (_militaryCycleManager.HandleLeftClick(Log, RunActionSync))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                _militaryCycleManager.Reset();
+            }
+        }
+
         // Xây nhà nhanh: Khi đang giữ phím xây dựng, mỗi click chuột trái đặt móng xong sẽ gửi tiếp [B -> Key]
         if (_fastBuildManager.IsHoldingKey)
         {
@@ -358,12 +461,16 @@ public class ControlEngine : IDisposable
             _fastBuildManager.OnLeftClickWhenNotHolding();
         }
 
+        _lastTabTime = DateTime.MinValue;
+        _lastShiftMilitaryKey = Keys.None;
+        _lastShiftMilitaryTime = DateTime.MinValue;
+
         return false;
     }
 
     private bool OnRightClickAction(int msg)
     {
-        if ((_currentState != MacroState.Active || !_gameWatcher.IsInGame) && !_isTestMode)
+        if ((_currentState != MacroState.Active || !_gameWatcher.IsInGame || !AoeWindowHelper.IsAoeForeground()) && !_isTestMode)
         {
             return false;
         }
@@ -426,7 +533,7 @@ public class ControlEngine : IDisposable
 
     private bool OnMiddleClickAction(int msg)
     {
-        if ((_currentState != MacroState.Active || !_gameWatcher.IsInGame) && !_isTestMode)
+        if ((_currentState != MacroState.Active || !_gameWatcher.IsInGame || !AoeWindowHelper.IsAoeForeground()) && !_isTestMode)
         {
             return false;
         }
@@ -460,6 +567,7 @@ public class ControlEngine : IDisposable
         if (!_isPhysicalCtrlDown)
         {
             _vayEManager.Reset();
+            _militaryCycleManager.Reset();
         }
         if (!_deleteManager.IsHolding)
         {
@@ -474,8 +582,11 @@ public class ControlEngine : IDisposable
             _hasAutoStartedForCurrentGame = false;
             _hasObservedNonInitialResources = false;
             MouseLockManager.ForceUnlock();
+            MouseLockManager.UnpinCursor();
+            _hasAppliedCursorLock = false;
             _vayEManager.Reset();
             _deleteManager.Reset();
+            _isDiplomacyOpen = false;
             _isPhysicalShiftDown = false;
             _isPhysicalCtrlDown = false;
             _isRightMouseDown = false;
@@ -486,6 +597,7 @@ public class ControlEngine : IDisposable
             _isAltCombo = false;
             InputSimulator.ReleaseAltKeysHardware();
             ExitFlagMode();
+            _chatDetector.Stop();
 
             // Tắt còi báo ruộng và dừng mọi âm thanh cảnh báo khi ra ngoài game/bị làm mờ
             _farmTimerManager.StopAllTimersAndAlarms();
@@ -494,12 +606,19 @@ public class ControlEngine : IDisposable
             if (_currentState == MacroState.Active || _currentState == MacroState.SuspendedChat)
             {
                 _savedStateBeforeUnfocus = _currentState;
-                SetState(MacroState.SuspendedOutOfGame, "Không nhận diện được thanh tài nguyên quá 1s (Ngoài game/Menu). Tạm dừng macro.");
+                SetState(MacroState.SuspendedOutOfGame, "Không nhận diện được thanh tài nguyên (Ngoài game/Menu). Tạm dừng macro.");
             }
         }
         else
         {
             PromoteHooks();
+            _chatDetector.Start();
+
+            if (AoeWindowHelper.TryGetAoeWindowScreenRect(out var aoeRect))
+            {
+                NativeMethods.ClipCursor(ref aoeRect);
+                _hasAppliedCursorLock = true;
+            }
 
             if (_currentState == MacroState.SuspendedOutOfGame)
             {
@@ -508,8 +627,63 @@ public class ControlEngine : IDisposable
         }
     }
 
+    private void CursorLockTimer_Tick(object? sender, EventArgs e)
+    {
+        // Điều kiện khóa chuột: Macro BẬT + Đang trong trận + Cửa sổ AOE đang active ở tiền cảnh (Foreground)
+        bool shouldLock = (_currentState == MacroState.Active || _currentState == MacroState.SuspendedChat)
+                          && _gameWatcher.IsInGame
+                          && AoeWindowHelper.IsAoeForeground();
+
+        if (shouldLock)
+        {
+            if (AoeWindowHelper.TryGetAoeWindowScreenRect(out var aoeRect))
+            {
+                // Kiểm tra xem hiện tại chuột có đang bị tràn ra ngoài biên cửa sổ AOE (sang màn hình thứ 2) không
+                if (NativeMethods.GetClipCursor(out var currentClip))
+                {
+                    // Nếu clip hiện tại rộng hơn cửa sổ AOE (hoặc đang unclipped = toàn màn hình ảo VirtualScreen)
+                    if (currentClip.Left < aoeRect.Left || currentClip.Right > aoeRect.Right ||
+                        currentClip.Top < aoeRect.Top || currentClip.Bottom > aoeRect.Bottom)
+                    {
+                        NativeMethods.ClipCursor(ref aoeRect);
+                    }
+                }
+                else
+                {
+                    NativeMethods.ClipCursor(ref aoeRect);
+                }
+                _hasAppliedCursorLock = true;
+            }
+        }
+        else
+        {
+            // Khi không ở trong game hoặc đã Alt-Tab / chuyển sang cửa sổ khác -> Giải phóng chuột tự do ngay lập tức
+            if (_hasAppliedCursorLock)
+            {
+                MouseLockManager.UnpinCursor();
+                _hasAppliedCursorLock = false;
+            }
+        }
+    }
+
     private void OnChatStatusChanged(bool inChat)
     {
+        _gameWatcher.SetChatStatus(inChat);
+        if (inChat)
+        {
+            if (_currentState == MacroState.Active)
+            {
+                _savedStateBeforeUnfocus = MacroState.Active;
+                SetState(MacroState.SuspendedChat, "Macro Tạm dừng (Phát hiện mở khung Chat qua điểm ảnh)");
+            }
+        }
+        else
+        {
+            if (_currentState == MacroState.SuspendedChat)
+            {
+                SetState(MacroState.Active, "Macro Hoạt động (Khung Chat đã đóng)");
+            }
+        }
     }
 
     private void SetState(MacroState newState, string logMsg)
@@ -564,9 +738,9 @@ public class ControlEngine : IDisposable
             return false;
         }
 
-        // Phải ở trong game (nhận diện được thanh tài nguyên) để thực thi các macro game
+        // Phải ở trong game và cửa sổ AOE đang active ở tiền cảnh để thực thi các macro game
         // NGOẠI TRỪ khi đang ở Chế độ Test (_isTestMode == true)
-        if (!_gameWatcher.IsInGame && !_isTestMode)
+        if ((!_gameWatcher.IsInGame || !AoeWindowHelper.IsAoeForeground()) && !_isTestMode)
         {
             return false;
         }
@@ -577,24 +751,11 @@ public class ControlEngine : IDisposable
             return true;
         }
 
-        // 2. Chat toggles (Enter & Escape)
-        if (_currentState == MacroState.Active || _isTestMode)
+        // 2. Chat trigger - Kích hoạt quét tức thì qua điểm ảnh khi có phím Enter hoặc Escape
+        if (isKeyDown && (key == Keys.Enter || key == Keys.Escape))
         {
-            if (isKeyDown && key == Keys.Enter)
-            {
-                _savedStateBeforeUnfocus = MacroState.SuspendedChat;
-                SetState(MacroState.SuspendedChat, "Macro Tạm dừng (Bắt đầu chat...)");
-                return false;
-            }
-        }
-        else if (_currentState == MacroState.SuspendedChat)
-        {
-            if (isKeyDown && (key == Keys.Enter || key == Keys.Escape))
-            {
-                _savedStateBeforeUnfocus = MacroState.Active;
-                SetState(MacroState.Active, "Macro Hoạt động (Gửi chat hoặc Thoát...)");
-                return false;
-            }
+            _chatDetector.TriggerImmediateScan();
+            return false;
         }
 
         // Nếu không ở trạng thái Active (Hoạt động) và không ở Chế độ Test -> Cho phím đi qua
@@ -661,6 +822,7 @@ public class ControlEngine : IDisposable
         if (!isKeyDown && (key == Keys.ControlKey || key == Keys.LControlKey || key == Keys.RControlKey))
         {
             _isPhysicalCtrlDown = false;
+            _militaryCycleManager.HandleCtrlUp();
 
             if (_ctrlFCount > 0 || _ctrlGCount > 0 || _activeFarmGroup > 0)
             {
@@ -822,11 +984,40 @@ public class ControlEngine : IDisposable
 
         if (!isKeyDown)
         {
+            if (_militaryCycleManager.HandleKeyUp(key))
+            {
+                return true;
+            }
             if (_fastBuildManager.HandleKeyUp(key, Log, RunActionSync))
             {
                 return true;
             }
             return IsMacroKey(key, ctrlPressed, shiftPressed);
+        }
+
+        // **Chức năng: Chuyển đồ nhanh** - Thoát Diplomacy bằng SPACE hoặc ESC
+        if (_isDiplomacyOpen && key == Keys.Space)
+        {
+            _isDiplomacyOpen = false;
+            _mouseHook.ResetInterceptedStates();
+            InputSimulator.ReleaseLeftMouse();
+            Log("[Chuyển đồ nhanh] (SPACE) -> Thoát trạng thái Diplomacy và giữ nguyên chức năng SPACE", Color.Magenta);
+            return false; // Cho phép phím SPACE gốc đi thẳng vào game
+        }
+
+        if (_isDiplomacyOpen && key == Keys.Escape)
+        {
+            _isDiplomacyOpen = false;
+            _mouseHook.ResetInterceptedStates();
+            InputSimulator.ReleaseLeftMouse();
+            Log("[Chuyển đồ nhanh] (ESC) -> Thoát trạng thái Diplomacy", Color.Magenta);
+            return false; // Cho phép ESC đi xuống game đóng dialog
+        }
+
+        // Nếu ấn phím khác không phải phím duyệt nhà binh (A, S, Z, X, D, C) trong khi duyệt nhà binh đang active -> Reset
+        if (_militaryCycleManager.IsActive && !MilitaryCycleManager.TryGetMilitaryTargetKey(key, out _, out _))
+        {
+            _militaryCycleManager.Reset();
         }
 
         // ----------------------------------------------------
@@ -927,12 +1118,12 @@ public class ControlEngine : IDisposable
             return true;
         }
 
-        if (shiftPressed && key == Keys.F) // SHIFT + F: Làm mới đạo ruộng 1 (ESC -> 7 -> S -> SPACE)
+        if (shiftPressed && key == Keys.F) // SHIFT + F: Làm mới đạo ruộng 1 (ESC -> 7 -> S -> SPACE -> S)
         {
             ResetAllChains();
             _isFarmRefreshActive = true;
             _lastFarmRefreshTime = DateTime.Now;
-            Log("[Đạo ruộng 1] SHIFT+F -> Làm mới đạo ruộng 1 (ESC -> 7 -> S -> SPACE)", Color.DarkGreen);
+            Log("[Đạo ruộng 1] SHIFT+F -> Làm mới đạo ruộng 1 (ESC -> 7 -> S -> SPACE -> S)", Color.DarkGreen);
             _farmTimerManager.RestartTimer1();
             RunActionSync(() =>
             {
@@ -945,6 +1136,8 @@ public class ControlEngine : IDisposable
                 InputSimulator.SendKeyPress((ushort)Keys.S);
                 Thread.Sleep(10);
                 InputSimulator.SendKeyPress((ushort)Keys.Space);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.S);
                 Thread.Sleep(10);
                 if (_isPhysicalShiftDown)
                 {
@@ -1006,12 +1199,12 @@ public class ControlEngine : IDisposable
             return true;
         }
 
-        if (shiftPressed && key == Keys.G) // SHIFT + G: Làm mới đạo ruộng 2 (ESC -> 8 -> S -> SPACE)
+        if (shiftPressed && key == Keys.G) // SHIFT + G: Làm mới đạo ruộng 2 (ESC -> 8 -> S -> SPACE -> S)
         {
             ResetAllChains();
             _isFarmRefreshActive = true;
             _lastFarmRefreshTime = DateTime.Now;
-            Log("[Đạo ruộng 2] SHIFT+G -> Làm mới đạo ruộng 2 (ESC -> 8 -> S -> SPACE)", Color.DarkGreen);
+            Log("[Đạo ruộng 2] SHIFT+G -> Làm mới đạo ruộng 2 (ESC -> 8 -> S -> SPACE -> S)", Color.DarkGreen);
             _farmTimerManager.RestartTimer2();
             RunActionSync(() =>
             {
@@ -1024,6 +1217,8 @@ public class ControlEngine : IDisposable
                 InputSimulator.SendKeyPress((ushort)Keys.S);
                 Thread.Sleep(10);
                 InputSimulator.SendKeyPress((ushort)Keys.Space);
+                Thread.Sleep(10);
+                InputSimulator.SendKeyPress((ushort)Keys.S);
                 Thread.Sleep(10);
                 if (_isPhysicalShiftDown)
                 {
@@ -1079,7 +1274,12 @@ public class ControlEngine : IDisposable
 
         // ----------------------------------------------------
         // **Chức năng: Xin quân nhanh** (SHIFT + Phím)
-        // Từ lần 2 trở đi: [Click chuột (Giữ 25ms) -> CTRL + Key]
+        // Lần 1: CTRL + Key
+        // Từ lần 2 trở đi: [*Kiểm tra hàng đợi quân* -> CTRL + Key]
+        //   Nếu hàng đợi null: [Click]
+        //   Nếu hàng đợi = 1, loading < 50: [Nothing]
+        //   Nếu hàng đợi = 1, loading >= 50: [Click]
+        //   Nếu hàng đợi >= 2: [Nothing]
         // ----------------------------------------------------
         if (shiftPressed && TryGetMilitaryTargetKey(key, out ushort shiftTargetVk, out string shiftMilitaryDesc))
         {
@@ -1091,11 +1291,78 @@ public class ControlEngine : IDisposable
 
             if (isConsecutive)
             {
-                Log($"[Xin quân nhanh] (Từ lần 2): Shift+{key} -> Click Trái (Giữ 25ms) -> CTRL+{((Keys)shiftTargetVk)} ({shiftMilitaryDesc})", Color.DarkMagenta);
                 RunActionSync(() =>
                 {
-                    InputSimulator.SendMouseClickHold(25); // Left Down -> Hold 25ms -> Left Up
-                    Thread.Sleep(10);
+                    // *Kiểm tra hàng đợi quân*: Quét lại trực tiếp cả HÀNG ĐỢI và TIẾN ĐỘ LOADING từ màn hình game
+                    var queue = _unitQueueOcrService?.CaptureAndRecognize();
+                    var loading = _loadingOcrService?.CaptureAndRecognize();
+
+                    _currentUnitQueue = queue;
+                    _currentLoading = loading;
+
+                    int? queueCount = (queue != null && queue.IsValid) ? queue.PrimaryCount : null;
+                    int loadingVal = (loading != null && loading.IsValid && loading.Percentage.HasValue) 
+                        ? loading.Percentage.Value 
+                        : 0;
+
+                    string queueInfo = (queueCount != null && queueCount > 0) 
+                        ? $"{queueCount.Value} (Ô {queue?.SlotIndex})" 
+                        : "null (0)";
+                    string loadingInfo = (loading != null && loading.IsValid && loading.Percentage.HasValue) 
+                        ? $"{loadingVal}%" 
+                        : "0%";
+
+                    bool shouldClick = true;
+
+                    if (queueCount == null || queueCount <= 0)
+                    {
+                        // Hàng đợi null hoặc <= 0: [Click]
+                        shouldClick = true;
+                    }
+                    else if (queueCount == 1)
+                    {
+                        // Hàng đợi = 1: kiểm tra loading
+                        if (loadingVal < 50)
+                        {
+                            // Loading < 50%: [Nothing]
+                            shouldClick = false;
+                        }
+                        else
+                        {
+                            // Loading >= 50%: [Click]
+                            shouldClick = true;
+                        }
+                    }
+                    else
+                    {
+                        // Hàng đợi >= 2: [Nothing]
+                        shouldClick = false;
+                    }
+
+                    if (shouldClick)
+                    {
+                        Log($"[Xin quân nhanh] Shift+{key} -> *Kiểm tra*: Hàng đợi: {queueInfo}, Loading: {loadingInfo} -> [CLICK] -> CTRL+{((Keys)shiftTargetVk)} ({shiftMilitaryDesc})", Color.DarkMagenta);
+                        bool isShiftDown = (NativeMethods.GetKeyState((int)Keys.ShiftKey) & 0x8000) != 0;
+                        if (isShiftDown)
+                        {
+                            InputSimulator.ReleaseShiftKeysHardware();
+                            Thread.Sleep(5);
+                        }
+
+                        InputSimulator.SendMouseClickHold(25); // Left Down -> Hold 25ms -> Left Up
+                        Thread.Sleep(15);
+
+                        if (isShiftDown)
+                        {
+                            InputSimulator.SendKeyDown((ushort)Keys.ShiftKey);
+                            Thread.Sleep(5);
+                        }
+                    }
+                    else
+                    {
+                        Log($"[Xin quân nhanh] Shift+{key} -> *Kiểm tra*: Hàng đợi: {queueInfo}, Loading: {loadingInfo} -> [BỎ QUA / NOTHING] -> CTRL+{((Keys)shiftTargetVk)} ({shiftMilitaryDesc})", Color.DarkOrange);
+                    }
+
                     InputSimulator.SendCtrlKeyCombo(shiftTargetVk);
                 });
             }
@@ -1105,6 +1372,16 @@ public class ControlEngine : IDisposable
                 RunActionSync(() =>
                 {
                     InputSimulator.SendCtrlKeyCombo(shiftTargetVk);
+
+                    // Cập nhật thông số của nhà vừa chuyển ở lần 1
+                    Task.Run(() =>
+                    {
+                        Thread.Sleep(60);
+                        var q = _unitQueueOcrService?.CaptureAndRecognize();
+                        var l = _loadingOcrService?.CaptureAndRecognize();
+                        _currentUnitQueue = q;
+                        _currentLoading = l;
+                    });
                 });
             }
             return true;
@@ -1113,19 +1390,14 @@ public class ControlEngine : IDisposable
         // ----------------------------------------------------
         // **Chức năng: Duyệt nhà binh** (CTRL + Phím)
         // ----------------------------------------------------
-        if (ctrlPressed && TryGetMilitaryTargetKey(key, out ushort ctrlTargetVk, out string ctrlMilitaryDesc))
+        if (ctrlPressed && _militaryCycleManager.HandleKeyDown(key, ctrlPressed, Log, RunActionSync))
         {
             ResetBuildingState();
-            Log($"[Duyệt nhà binh] CTRL+{key} -> CTRL+{((Keys)ctrlTargetVk)} ({ctrlMilitaryDesc})", Color.DarkGreen);
-            RunActionSync(() =>
-            {
-                InputSimulator.SendCtrlKeyCombo(ctrlTargetVk);
-            });
             return true;
         }
 
         // ----------------------------------------------------
-        // **Chức năng: Mở bảng ngoại giao** (F3, F4)
+        // **Chức năng: Mở bảng ngoại giao / Chuyển đồ nhanh** (F3, F4)
         // ----------------------------------------------------
         if (key == Keys.F3)
         {
@@ -1226,23 +1498,7 @@ public class ControlEngine : IDisposable
 
     private static bool TryGetMilitaryTargetKey(Keys key, out ushort targetVk, out string desc)
     {
-        switch (key)
-        {
-            case Keys.A:
-                targetVk = (ushort)Keys.A; desc = "Nhà Bắn Cung BA"; return true;
-            case Keys.S:
-                targetVk = (ushort)Keys.L; desc = "Nhà Ngựa Chém BL"; return true;
-            case Keys.Z:
-                targetVk = (ushort)Keys.K; desc = "Nhà Chế Pháo BK"; return true;
-            case Keys.X:
-                targetVk = (ushort)Keys.Y; desc = "Nhà Xọc Xiên BY"; return true;
-            case Keys.D:
-                targetVk = (ushort)Keys.B; desc = "Nhà Lính Chùy BB"; return true;
-            case Keys.C:
-                targetVk = (ushort)Keys.P; desc = "Nhà Phù Thủy BP"; return true;
-            default:
-                targetVk = 0; desc = ""; return false;
-        }
+        return MilitaryCycleManager.TryGetMilitaryTargetKey(key, out targetVk, out desc);
     }
 
 
@@ -1355,7 +1611,7 @@ public class ControlEngine : IDisposable
     {
         _isAutoStartExecuting = true;
         _mouseHook.BlockMouseClicks = true;
-        Log("[Khởi đầu nhanh tự động] Nhận diện tài nguyên khởi đầu (200 Gỗ / 200 Thực) -> Thực thi F4 > F11 và 8x (H > C)...", Color.DarkBlue);
+        Log("[Khởi đầu nhanh tự động] Nhận diện tài nguyên khởi đầu (200 Gỗ / 200 Thực) -> Thực thi F4 > F11 và [H > C ^ 6]...", Color.DarkBlue);
 
         Task.Run(() =>
         {
@@ -1367,11 +1623,11 @@ public class ControlEngine : IDisposable
                 InputSimulator.SendKeyPress((ushort)Keys.F11, 20);
                 Thread.Sleep(40);
 
-                // 2. Nhấn (H > C) nhanh 8 lần
-                for (int i = 0; i < 8; i++)
+                // 2. Nhấn H 1 lần (chọn nhà chính), sau đó nhấn C 6 lần (xin dân)
+                InputSimulator.SendKeyPress((ushort)Keys.H, 15);
+                Thread.Sleep(25);
+                for (int i = 0; i < 6; i++)
                 {
-                    InputSimulator.SendKeyPress((ushort)Keys.H, 10);
-                    Thread.Sleep(15);
                     InputSimulator.SendKeyPress((ushort)Keys.C, 10);
                     Thread.Sleep(25);
                 }
@@ -1388,7 +1644,7 @@ public class ControlEngine : IDisposable
 
                 // 4. Reset tất cả các bộ đếm về trạng thái sơ khai
                 ResetAllCountersToInitial();
-                Log("[Khởi đầu nhanh tự động] Hoàn tất 8x (H > C) -> Đã mở lại chuột và reset tất cả bộ đếm về trạng thái sơ khai.", Color.DarkGreen);
+                Log("[Khởi đầu nhanh tự động] Hoàn tất [H > C ^ 6] -> Đã mở lại chuột và reset tất cả bộ đếm về trạng thái sơ khai.", Color.DarkGreen);
             }
         });
     }
@@ -1423,6 +1679,11 @@ public class ControlEngine : IDisposable
     {
         ResetAllChains();
         _deleteManager.Reset();
+        _militaryCycleManager.Reset();
+        _chatDetector.Reset();
+        _isDiplomacyOpen = false;
+        _mouseHook.ResetInterceptedStates();
+        InputSimulator.ReleaseLeftMouse();
         _ctrlFCount = 0;
         _ctrlGCount = 0;
         _activeFarmGroup = 0;
@@ -1533,8 +1794,20 @@ public class ControlEngine : IDisposable
 
     private void HandleF3Diplomacy()
     {
-        Log("[Chức năng: Mở bảng ngoại giao] (F3) -> Click nút Diplomacy", Color.Magenta);
-        RunActionSync(() => InputSimulator.ClickDiplomacy());
+        if (!_isDiplomacyOpen)
+        {
+            _isDiplomacyOpen = true;
+            Log("[Chuyển đồ nhanh] (F3) Mở Diplomacy -> Trạng thái Bơm đồ [Active]. Giữ CTRL + CLICK để gửi 5 click. Nhấn F3 hoặc SPACE để thoát.", Color.Magenta);
+            RunActionSync(() => InputSimulator.ClickDiplomacy());
+        }
+        else
+        {
+            _isDiplomacyOpen = false;
+            _mouseHook.ResetInterceptedStates();
+            InputSimulator.ReleaseLeftMouse();
+            Log("[Chuyển đồ nhanh] (F3) Đóng Diplomacy -> [ESC]", Color.Magenta);
+            RunActionSync(() => InputSimulator.SendKeyPress((ushort)Keys.Escape, 20));
+        }
     }
 
     private void HandleF4Timeline()
@@ -1564,6 +1837,8 @@ public class ControlEngine : IDisposable
     {
         Stop();
         MouseLockManager.Dispose();
+        _chatDetector.Dispose();
+        _cursorLockTimer.Dispose();
         _f2LoopTimer.Dispose();
         _farmTimerManager.Dispose();
         _gameWatcher.Dispose();

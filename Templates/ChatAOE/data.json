@@ -1,0 +1,41 @@
+﻿{
+  "project_name": "PopAoe",
+  "package_name": "ChatAOE",
+  "export_time": "2026-09-28T22:47:48",
+  "summary": {
+    "total_areas": 1,
+    "total_crops": 1,
+    "has_source_images": false
+  },
+  "areas": [
+    {
+      "id": 1,
+      "name": "Chat Area",
+      "source_image": "Clipboard_222957.png",
+      "source_width": 1366,
+      "source_height": 768,
+      "x": 450,
+      "y": 377,
+      "width": 56,
+      "height": 15,
+      "aspect_ratio": "56:15",
+      "crop_file": null
+    }
+  ],
+  "crops": [
+    {
+      "id": 1,
+      "name": "Chat Crop",
+      "file_name": "crop_001_Chat Crop.png",
+      "relative_path": "crops/crop_001_Chat Crop.png",
+      "source_image": "Clipboard_222957.png",
+      "source_width": 1366,
+      "source_height": 768,
+      "x": 450,
+      "y": 377,
+      "width": 56,
+      "height": 15,
+      "aspect_ratio": "56:15"
+    }
+  ]
+}

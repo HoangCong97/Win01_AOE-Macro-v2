@@ -35,6 +35,15 @@ public class GameStateWatcher : IDisposable
         }
     }
 
+    public void SetChatStatus(bool inChat)
+    {
+        if (_isInChat != inChat)
+        {
+            _isInChat = inChat;
+            ChatStatusChanged?.Invoke(_isInChat);
+        }
+    }
+
     public void NotifyEnterKey()
     {
         _isInChat = !_isInChat;

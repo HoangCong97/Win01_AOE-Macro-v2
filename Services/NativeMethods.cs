@@ -128,6 +128,13 @@ public static class NativeMethods
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool IsIconic(IntPtr hWnd);
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -170,6 +177,9 @@ public static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool ClipCursor(IntPtr lpRect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool GetClipCursor(out RECT lpRect);
 
     // ----------------------------------------------------
     // Raw Input APIs and Structures

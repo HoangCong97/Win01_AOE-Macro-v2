@@ -17,5 +17,8 @@ public class AppSettings
     public ResourceCropSettings ResourceCrop { get; set; } = new();
     public PopCropSettings PopCrop { get; set; } = new();
     public TimerCropSettings TimerCrop { get; set; } = new();
+    public ChatCropSettings ChatCrop { get; set; } = new();
+    public LoadingCropSettings LoadingCrop { get; set; } = new();
+    public UnitQueueCropSettings UnitQueueCrop { get; set; } = new();
     public HudSettings Hud { get; set; } = new();
 }

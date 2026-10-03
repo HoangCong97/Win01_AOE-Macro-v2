@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace AOEKeyboardMacroPro.Services;
 
@@ -72,18 +72,29 @@ public static class MouseLockManager
     }
 
     /// <summary>
+    /// Lấy phạm vi màn hình thực tế của cửa sổ game AOE (Client area quy đổi ra tọa độ màn hình, kẹp chặt trong màn hình chứa cửa sổ).
+    /// </summary>
+    public static bool TryGetAoeWindowScreenRect(out NativeMethods.RECT screenRect)
+    {
+        return AoeWindowHelper.TryGetAoeWindowScreenRect(out screenRect);
+    }
+
+    /// <summary>
     /// Thực thi một hành động có bảo vệ chuột:
-    /// - Ghi nhận vị trí ban đầu của chuột.
+    /// - Ghi nhận vị trí ban đầu của chuột và lưu lại vùng ClipCursor hiện hành của game.
     /// - Reset bộ tích lũy delta chuyển động (Raw Input).
     /// - Khóa click chuột người dùng để tránh bấm nhầm.
     /// - Tùy chọn ghim vị trí chuột tại chỗ (pinAtCurrentPos).
-    /// - Sau khi xong: giải phóng ClipCursor, tính toán vị trí mới = ban đầu + delta, đưa chuột về đích.
+    /// - Sau khi xong: khôi phục nguyên vẹn vùng ClipCursor trước đó của game AOE,
+    ///   giới hạn tọa độ bù chuột chặt chẽ trong khung cửa sổ game AOE (không văng sang màn hình 2).
     /// </summary>
     public static void ExecuteLockedAction(Action action, bool pinAtCurrentPos = false)
     {
         lock (_lockObj)
         {
             NativeMethods.GetCursorPos(out NativeMethods.POINT initialPt);
+            NativeMethods.GetClipCursor(out NativeMethods.RECT savedClip);
+
             Interlocked.Exchange(ref _accumulatedDeltaX, 0);
             Interlocked.Exchange(ref _accumulatedDeltaY, 0);
             IsLocked = true;
@@ -100,7 +111,20 @@ public static class MouseLockManager
             }
             finally
             {
-                UnpinCursor();
+                // Khôi phục lại đúng vùng khóa chuột gốc của cửa sổ game AOE trước khi macro chạy.
+                // TUYỆT ĐỐI KHÔNG GỌI UnpinCursor() vì sẽ hủy toàn bộ ClipCursor của game trên Windows!
+                bool restored = false;
+                if (savedClip.Right > savedClip.Left + 10 && savedClip.Bottom > savedClip.Top + 10)
+                {
+                    NativeMethods.ClipCursor(ref savedClip);
+                    restored = true;
+                }
+
+                if (!restored && TryGetAoeWindowScreenRect(out NativeMethods.RECT aoeScreenRect))
+                {
+                    NativeMethods.ClipCursor(ref aoeScreenRect);
+                }
+
                 _receiver?.SetSinkEnabled(false);
                 IsLocked = false;
 
@@ -110,10 +134,17 @@ public static class MouseLockManager
                 int finalX = initialPt.X + dx;
                 int finalY = initialPt.Y + dy;
 
-                // Giới hạn trong kích thước màn hình ảo (hỗ trợ đa màn hình)
-                Rectangle vs = SystemInformation.VirtualScreen;
-                finalX = Math.Clamp(finalX, vs.Left, vs.Right - 1);
-                finalY = Math.Clamp(finalY, vs.Top, vs.Bottom - 1);
+                // Giới hạn tọa độ bù chuột chặt chẽ trong khung cửa sổ game AOE để không văng ra ngoài màn hình 2
+                if (TryGetAoeWindowScreenRect(out NativeMethods.RECT aoeLimit))
+                {
+                    finalX = Math.Clamp(finalX, aoeLimit.Left, aoeLimit.Right - 1);
+                    finalY = Math.Clamp(finalY, aoeLimit.Top, aoeLimit.Bottom - 1);
+                }
+                else if (savedClip.Right > savedClip.Left && savedClip.Bottom > savedClip.Top)
+                {
+                    finalX = Math.Clamp(finalX, savedClip.Left, savedClip.Right - 1);
+                    finalY = Math.Clamp(finalY, savedClip.Top, savedClip.Bottom - 1);
+                }
 
                 NativeMethods.SetCursorPos(finalX, finalY);
             }
@@ -121,7 +152,7 @@ public static class MouseLockManager
     }
 
     /// <summary>
-    /// Mở khóa khẩn cấp nếu có sự cố hoặc ứng dụng bị mất focus.
+    /// Mở khóa khẩn cấp: giải phóng hoàn toàn con trỏ chuột và reset các trạng thái khóa.
     /// </summary>
     public static void ForceUnlock()
     {
