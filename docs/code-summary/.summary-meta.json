@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "status": "done",
+  "phase": 5,
+  "createdAt": "2026-10-06",
+  "updatedAt": "2026-10-05",
+  "modules": [
+    {
+      "name": "ui",
+      "paths": [
+        "MainForm.cs",
+        "MainForm.Designer.cs",
+        "MiniHudForm.cs",
+        "Program.cs"
+      ],
+      "parent": null,
+      "doc": "modules/ui.md",
+      "status": "done",
+      "responsibility": "Giao diện chính MainForm, Mini HUD overlay trong game, và điểm khởi động Program.",
+      "hash": "de64805f9465",
+      "lines": 2606,
+      "files": 4,
+      "summarizedAt": "2026-10-05"
+    },
+    {
+      "name": "core-engine",
+      "paths": [
+        "Services/ControlEngine.cs"
+      ],
+      "parent": null,
+      "doc": "modules/core-engine.md",
+      "status": "done",
+      "responsibility": "Bộ điều phối macro trung tâm, xử lý phím OnKeyAction, timer vòng lặp và chuyển đổi trạng thái.",
+      "hash": "a2d0ffc3f52f",
+      "lines": 1851,
+      "files": 1,
+      "summarizedAt": "2026-10-05"
+    },
+    {
+      "name": "macro-features",
+      "paths": [
+        "Services/FastBuildManager.cs",
+        "Services/FarmTimerManager.cs",
+        "Services/MilitaryCycleManager.cs",
+        "Services/VayEManager.cs",
+        "Services/DeleteManager.cs",
+        "Services/GameStateWatcher.cs"
+      ],
+      "parent": null,
+      "doc": "modules/macro-features.md",
+      "status": "done",
+      "responsibility": "Các module nghiệp vụ macro game: Xây nhà nhanh, đếm ruộng, duyệt nhà quân, vẩy E, xoá dân/nhà, theo dõi game.",
+      "hash": "cf37d617e756",
+      "lines": 997,
+      "files": 6,
+      "summarizedAt": "2026-10-05"
+    },
+    {
+      "name": "ocr-vision",
+      "paths": [
+        "Services/ResourceOcrService.cs",
+        "Services/PopOcrService.cs",
+        "Services/TimerOcrService.cs",
+        "Services/LoadingOcrService.cs",
+        "Services/UnitQueueOcrService.cs",
+        "Services/ChatDetectionService.cs",
+        "Models/ResourceCropSettings.cs",
+        "Models/LoadingCropSettings.cs",
+        "Models/UnitQueueCropSettings.cs"
+      ],
+      "parent": null,
+      "doc": "modules/ocr-vision.md",
+      "status": "done",
+      "responsibility": "Dịch vụ nhận diện thị giác máy tính & OCR mẫu: Tài nguyên, dân số pop, đồng hồ, thanh loading, hàng đợi quân, và chat.",
+      "hash": "66210e2f1198",
+      "lines": 3186,
+      "files": 9,
+      "summarizedAt": "2026-10-05"
+    },
+    {
+      "name": "input-native",
+      "paths": [
+        "Services/NativeMethods.cs",
+        "Services/InputSimulator.cs",
+        "Services/KeyboardHookManager.cs",
+        "Services/MouseHookManager.cs",
+        "Services/MouseLockManager.cs",
+        "Services/AoeWindowHelper.cs",
+        "Services/SystemPolicyManager.cs"
+      ],
+      "parent": null,
+      "doc": "modules/input-native.md",
+      "status": "done",
+      "responsibility": "Tương tác tầng hệ điều hành Win32: Hook chuột/phím, mô phỏng SendInput, khoá chuột RawInput, tìm cửa sổ game, chính sách hệ thống.",
+      "hash": "7515a6671e41",
+      "lines": 1717,
+      "files": 7,
+      "summarizedAt": "2026-10-05"
+    },
+    {
+      "name": "shared-utils",
+      "paths": [
+        "Models/AppSettings.cs",
+        "Models/KeyMapItem.cs",
+        "Models/MacroState.cs",
+        "Services/ConfigService.cs",
+        "Services/CrashLogger.cs",
+        "Services/MidiPlayer.cs"
+      ],
+      "parent": null,
+      "doc": "modules/shared-utils.md",
+      "status": "done",
+      "responsibility": "Mô hình dữ liệu DTO, lưu cấu hình JSON, ghi log sự cố và phát âm thanh báo hiệu MIDI.",
+      "hash": "da1856f3e9f1",
+      "lines": 523,
+      "files": 6,
+      "summarizedAt": "2026-10-05"
+    }
+  ],
+  "excluded": [
+    "AOEKeyboardMacroPro_v27.exe",
+    "sample_aoe.jpg",
+    "sample_aoe_pop.jpg",
+    "SoundTimer.mid",
+    "im2.png",
+    "app_icon.ico",
+    "Templates",
+    "AI env",
+    "docs"
+  ],
+  "gitCommit": "5f674d7"
+}
